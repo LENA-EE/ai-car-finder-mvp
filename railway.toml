@@ -1,0 +1,15 @@
+# AI Car Finder MVP - Railway Configuration
+# https://docs.railway.app/reference/config-as-code
+
+[build]
+builder = "nixpacks"
+
+[deploy]
+startCommand = "npm start"
+restartPolicyType = "ON_FAILURE"
+restartPolicyMaxRetries = 10
+healthcheckPath = "/health"
+healthcheckTimeout = 30
+
+[services.backend]
+httpPort = 3000

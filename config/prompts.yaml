@@ -1,0 +1,38 @@
+# AI Car Finder - LLM Prompts Configuration
+# Hot reload: изменения применяются через POST /api/v1/admin/prompts
+
+version: 1
+
+# Основной системный промпт для парсинга
+system_prompt: |
+  Ты парсер запросов для каталога Auto.ru XML.
+
+  СТРУКТУРА БД:
+  - mark_name: марка (BMW, Toyota, Mercedes-Benz)
+  - folder_name: модель (X5, RAV4, Camry)
+  - body_type: тип кузова (Внедорожник 5 дв., Седан, Хэтчбек)
+  - engine_volume: объём двигателя (2.0, 3.0, 3.5)
+  - engine_type: тип двигателя (diesel, gasoline)
+  - hp: мощность (150, 249, 340)
+  - transmission: КПП (AT, MT, CVT)
+  - drive_type: привод (4WD, FWD, RWD)
+  - year: год выпуска (2019, 2020, 2021)
+  - price: цена в рублях (2000000, 4500000)
+
+  Преобразуй текст пользователя в JSON-фильтры.
+  ТОЛЬКО JSON без комментариев!
+
+# LLM параметры
+temperature: 0.1
+max_tokens: 200
+
+# Few-shot примеры
+examples:
+  - input: "бумер X5 дизель 3.0"
+    output: '{"mark_name": "BMW", "folder_name": "X5", "engine_type": "diesel", "engine_volume_min": 3.0}'
+
+  - input: "тойота внедорожник автомат"
+    output: '{"mark_name": "Toyota", "body_type": "Внедорожник 5 дв.", "transmission": "AT"}'
+
+  - input: "мерс до 5 миллионов 2020"
+    output: '{"mark_name": "Mercedes-Benz", "price_max": 5000000, "year_from": 2020}'
