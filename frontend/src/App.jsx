@@ -6,8 +6,8 @@
 import { useState, useEffect } from "react";
 import "./App.css";
 
-const API_URL = import.meta.env.VITE_API_URL || "http://localhost:3002";
-
+// const API_URL = import.meta.env.VITE_API_URL || "http://localhost:3002";
+const API_URL = "https://backend-service-production-a865.up.railway.app";
 // Компонент User Search
 function UserSearch() {
   const [query, setQuery] = useState("");
