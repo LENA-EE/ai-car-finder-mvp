@@ -1,0 +1,11 @@
+{
+  "name": "doc-validator-mvp",
+  "version": "1.0.0",
+  "description": "AI documentation validator",
+  "main": "src/validator.js",
+  "scripts": {
+    "validate": "node src/validator.js",
+    "server": "node src/server.js"
+  },
+  "type": "module"
+}
