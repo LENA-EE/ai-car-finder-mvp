@@ -759,9 +759,16 @@ h1 {
 }
 
 .csv-format h4 {
-  margin: 0 0 8px 0;
+  margin: 0 0 12px 0;
   color: #94a3b8;
   font-size: 12px;
+}
+
+.format-label {
+  margin: 8px 0 4px 0;
+  color: #64748b;
+  font-size: 11px;
+  font-weight: bold;
 }
 
 .csv-format code {

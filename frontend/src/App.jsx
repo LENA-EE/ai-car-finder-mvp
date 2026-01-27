@@ -356,11 +356,16 @@ function CatalogUpload() {
     fetchCatalogSize();
   }, []);
 
+  const isValidFile = (filename) => {
+    const lower = filename.toLowerCase();
+    return lower.endsWith('.csv') || lower.endsWith('.xml');
+  };
+
   const handleFileSelect = (e) => {
     const selectedFile = e.target.files?.[0];
     if (selectedFile) {
-      if (!selectedFile.name.endsWith('.csv')) {
-        setError('Только CSV файлы поддерживаются');
+      if (!isValidFile(selectedFile.name)) {
+        setError('Поддерживаются только CSV и XML файлы');
         return;
       }
       setFile(selectedFile);
@@ -374,8 +379,8 @@ function CatalogUpload() {
     setDragOver(false);
     const droppedFile = e.dataTransfer.files?.[0];
     if (droppedFile) {
-      if (!droppedFile.name.endsWith('.csv')) {
-        setError('Только CSV файлы поддерживаются');
+      if (!isValidFile(droppedFile.name)) {
+        setError('Поддерживаются только CSV и XML файлы');
         return;
       }
       setFile(droppedFile);
@@ -459,7 +464,7 @@ function CatalogUpload() {
         <input
           id="file-input"
           type="file"
-          accept=".csv"
+          accept=".csv,.xml"
           onChange={handleFileSelect}
           style={{ display: 'none' }}
         />
@@ -470,7 +475,7 @@ function CatalogUpload() {
           </div>
         ) : (
           <div className="drop-text">
-            <p>Перетащите CSV файл сюда</p>
+            <p>Перетащите CSV или XML файл сюда</p>
             <p className="drop-hint">или нажмите для выбора</p>
           </div>
         )}
@@ -552,8 +557,11 @@ function CatalogUpload() {
       )}
 
       <div className="csv-format">
-        <h4>Формат CSV:</h4>
+        <h4>Поддерживаемые форматы:</h4>
+        <p className="format-label">CSV:</p>
         <code>mark_name,folder_name,body_type,engine_volume,hp,transmission,drive_type,engine_type,year,price</code>
+        <p className="format-label">XML (Auto.ru):</p>
+        <code>&lt;catalog&gt;&lt;mark name="BMW"&gt;&lt;folder name="X5"&gt;&lt;modification&gt;...&lt;/modification&gt;&lt;/folder&gt;&lt;/mark&gt;&lt;/catalog&gt;</code>
         <p className="format-hint">Обязательное поле: mark_name</p>
       </div>
     </div>

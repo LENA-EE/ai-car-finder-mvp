@@ -10,6 +10,7 @@ const jwt = require('jsonwebtoken');
 const bcrypt = require('bcryptjs');
 const multer = require('multer');
 const { parse: csvParse } = require('csv-parse/sync');
+const xml2js = require('xml2js');
 
 const app = express();
 app.use(cors());
@@ -688,32 +689,200 @@ app.get('/api/v1/admin/audit', authenticateToken, requireAdmin, async (req, res)
   }
 });
 
-// POST /api/v1/admin/catalog/upload - загрузка каталога CSV (только admin)
+// ===========================================
+// XML Parser для Auto.ru формата
+// ===========================================
+async function parseAutoRuXml(content) {
+  const parser = new xml2js.Parser({
+    explicitArray: false,
+    mergeAttrs: true,
+    trim: true
+  });
+
+  const result = await parser.parseStringPromise(content);
+  const records = [];
+
+  // Функция для извлечения текста из элемента
+  const getText = (obj) => {
+    if (!obj) return null;
+    if (typeof obj === 'string') return obj.trim();
+    if (obj._) return obj._.trim();
+    if (obj.$) return null;
+    return String(obj).trim();
+  };
+
+  // Функция для извлечения атрибута
+  const getAttr = (obj, attr) => {
+    if (!obj) return null;
+    if (obj.$ && obj.$[attr]) return obj.$[attr];
+    if (obj[attr]) return obj[attr];
+    return null;
+  };
+
+  // Обработка вложенной структуры Auto.ru: catalog > mark > folder > modification
+  const processNestedStructure = (data) => {
+    const catalog = data.catalog || data.cars || data.data || data;
+
+    // Найдем марки
+    let marks = catalog.mark || catalog.marks || catalog.brand || catalog.brands || [];
+    if (!Array.isArray(marks)) marks = [marks];
+
+    for (const mark of marks) {
+      const markName = getAttr(mark, 'name') || getText(mark.name) || getText(mark.mark_name);
+      const markCode = getAttr(mark, 'code') || getText(mark.code) || getText(mark.mark_code);
+
+      if (!markName) continue;
+
+      // Найдем модели/папки
+      let folders = mark.folder || mark.folders || mark.model || mark.models || [];
+      if (!Array.isArray(folders)) folders = [folders];
+
+      for (const folder of folders) {
+        const folderName = getAttr(folder, 'name') || getText(folder.name) || getText(folder.folder_name);
+        const folderId = getAttr(folder, 'id') || getText(folder.id) || getText(folder.folder_id);
+
+        // Найдем модификации
+        let modifications = folder.modification || folder.modifications || folder.variant || folder.variants || [];
+        if (!Array.isArray(modifications)) modifications = [modifications];
+
+        if (modifications.length === 0) {
+          // Если нет модификаций, создаем запись на уровне folder
+          records.push({
+            mark_name: markName,
+            mark_code: markCode,
+            folder_name: folderName,
+            folder_id: folderId,
+            body_type: getText(folder.body_type),
+            engine_volume: parseFloat(getText(folder.engine_volume)) || null,
+            hp: parseInt(getText(folder.hp) || getText(folder.power)) || null,
+            transmission: getText(folder.transmission),
+            drive_type: getText(folder.drive_type) || getText(folder.drive),
+            engine_type: getText(folder.engine_type) || getText(folder.fuel),
+            year: parseInt(getText(folder.year)) || null,
+            year_from: parseInt(getText(folder.year_from)) || null,
+            year_to: parseInt(getText(folder.year_to)) || null,
+            price: parseInt(getText(folder.price)) || null
+          });
+        } else {
+          for (const mod of modifications) {
+            records.push({
+              mark_name: markName,
+              mark_code: markCode,
+              folder_name: folderName,
+              folder_id: folderId,
+              model_name: getText(mod.model_name) || getText(mod.model),
+              modification_name: getAttr(mod, 'name') || getText(mod.name) || getText(mod.modification_name),
+              modification_id: getAttr(mod, 'id') || getText(mod.id) || getText(mod.modification_id),
+              tech_param_id: getAttr(mod, 'tech_param_id') || getText(mod.tech_param_id),
+              configuration_id: getText(mod.configuration_id),
+              body_type: getText(mod.body_type),
+              engine_volume: parseFloat(getText(mod.engine_volume) || getText(mod.volume)) || null,
+              hp: parseInt(getText(mod.hp) || getText(mod.power) || getText(mod.horsepower)) || null,
+              transmission: getText(mod.transmission),
+              drive_type: getText(mod.drive_type) || getText(mod.drive),
+              engine_type: getText(mod.engine_type) || getText(mod.fuel),
+              year: parseInt(getText(mod.year)) || null,
+              year_from: parseInt(getText(mod.year_from)) || null,
+              year_to: parseInt(getText(mod.year_to)) || null,
+              price: parseInt(getText(mod.price)) || null
+            });
+          }
+        }
+      }
+    }
+    return records;
+  };
+
+  // Обработка плоской структуры: cars > car
+  const processFlatStructure = (data) => {
+    const root = data.cars || data.catalog || data.data || data;
+    let cars = root.car || root.cars || root.item || root.items || root.vehicle || root.vehicles || [];
+    if (!Array.isArray(cars)) cars = [cars];
+
+    for (const car of cars) {
+      if (!car) continue;
+      const markName = getText(car.mark_name) || getText(car.mark) || getText(car.brand);
+      if (!markName) continue;
+
+      records.push({
+        mark_name: markName,
+        mark_code: getText(car.mark_code),
+        folder_name: getText(car.folder_name) || getText(car.model),
+        folder_id: getText(car.folder_id),
+        model_name: getText(car.model_name),
+        modification_name: getText(car.modification_name) || getText(car.modification),
+        modification_id: getText(car.modification_id),
+        tech_param_id: getText(car.tech_param_id),
+        configuration_id: getText(car.configuration_id),
+        body_type: getText(car.body_type),
+        engine_volume: parseFloat(getText(car.engine_volume) || getText(car.volume)) || null,
+        hp: parseInt(getText(car.hp) || getText(car.power) || getText(car.horsepower)) || null,
+        transmission: getText(car.transmission),
+        drive_type: getText(car.drive_type) || getText(car.drive),
+        engine_type: getText(car.engine_type) || getText(car.fuel),
+        year: parseInt(getText(car.year)) || null,
+        year_from: parseInt(getText(car.year_from)) || null,
+        year_to: parseInt(getText(car.year_to)) || null,
+        price: parseInt(getText(car.price)) || null
+      });
+    }
+    return records;
+  };
+
+  // Пробуем обе структуры
+  const nestedRecords = processNestedStructure(result);
+  if (nestedRecords.length > 0) {
+    return nestedRecords;
+  }
+
+  return processFlatStructure(result);
+}
+
+// ===========================================
+// CATALOG UPLOAD (CSV + XML)
+// ===========================================
+
+// POST /api/v1/admin/catalog/upload - загрузка каталога CSV/XML (только admin)
 app.post('/api/v1/admin/catalog/upload', authenticateToken, requireAdmin, upload.single('file'), async (req, res) => {
   if (!req.file) {
-    return res.status(400).json({ error: 'NO_FILE', details: 'CSV file required' });
+    return res.status(400).json({ error: 'NO_FILE', details: 'CSV or XML file required' });
   }
 
   const startTime = Date.now();
+  const filename = req.file.originalname.toLowerCase();
+  const isXml = filename.endsWith('.xml');
+  const isCsv = filename.endsWith('.csv');
+
+  if (!isXml && !isCsv) {
+    return res.status(400).json({ error: 'INVALID_FORMAT', details: 'Only CSV and XML files are supported' });
+  }
 
   try {
     const content = req.file.buffer.toString('utf-8');
-    let records;
+    let records = [];
 
-    // Parse CSV
-    try {
-      records = csvParse(content, {
-        columns: true,
-        skip_empty_lines: true,
-        trim: true,
-        bom: true
-      });
-    } catch (parseErr) {
-      return res.status(400).json({ error: 'PARSE_ERROR', details: `CSV parse error: ${parseErr.message}` });
+    // Parse file based on format
+    if (isCsv) {
+      try {
+        records = csvParse(content, {
+          columns: true,
+          skip_empty_lines: true,
+          trim: true,
+          bom: true
+        });
+      } catch (parseErr) {
+        return res.status(400).json({ error: 'PARSE_ERROR', details: `CSV parse error: ${parseErr.message}` });
+      }
+    } else if (isXml) {
+      try {
+        records = await parseAutoRuXml(content);
+      } catch (parseErr) {
+        return res.status(400).json({ error: 'PARSE_ERROR', details: `XML parse error: ${parseErr.message}` });
+      }
     }
 
     if (records.length === 0) {
-      return res.status(400).json({ error: 'EMPTY_FILE', details: 'CSV file is empty' });
+      return res.status(400).json({ error: 'EMPTY_FILE', details: 'File contains no valid records' });
     }
 
     // Validate and insert records
@@ -724,60 +893,38 @@ app.post('/api/v1/admin/catalog/upload', authenticateToken, requireAdmin, upload
     const marks = new Set();
     const models = new Set();
 
-    // Required fields
-    const requiredFields = ['mark_name'];
-
     for (let i = 0; i < records.length; i++) {
       const row = records[i];
-      const rowNum = i + 2; // +2 for header and 0-index
+      const rowNum = i + 1;
 
-      // Check required fields
-      const missingFields = requiredFields.filter(f => !row[f] || row[f].trim() === '');
-      if (missingFields.length > 0) {
-        errors.push({ row: rowNum, error: `Missing required fields: ${missingFields.join(', ')}` });
+      // Check required field
+      if (!row.mark_name || (typeof row.mark_name === 'string' && row.mark_name.trim() === '')) {
+        errors.push({ row: rowNum, error: 'Missing required field: mark_name' });
         continue;
       }
 
-      // Prepare values with validation
+      // Prepare car object
       const car = {
-        mark_name: row.mark_name?.trim(),
-        mark_code: row.mark_code?.trim() || null,
-        folder_name: row.folder_name?.trim() || null,
-        folder_id: row.folder_id?.trim() || null,
-        model_name: row.model_name?.trim() || null,
-        modification_name: row.modification_name?.trim() || null,
-        modification_id: row.modification_id?.trim() || null,
-        tech_param_id: row.tech_param_id?.trim() || null,
-        configuration_id: row.configuration_id?.trim() || null,
-        body_type: row.body_type?.trim() || null,
-        engine_volume: parseFloat(row.engine_volume) || null,
-        hp: parseInt(row.hp) || null,
-        transmission: row.transmission?.trim() || null,
-        drive_type: row.drive_type?.trim() || null,
-        engine_type: row.engine_type?.trim() || null,
-        year: parseInt(row.year) || null,
-        year_from: parseInt(row.year_from) || null,
-        year_to: parseInt(row.year_to) || null,
-        price: parseInt(row.price) || null
+        mark_name: typeof row.mark_name === 'string' ? row.mark_name.trim() : row.mark_name,
+        mark_code: row.mark_code || null,
+        folder_name: row.folder_name || null,
+        folder_id: row.folder_id || null,
+        model_name: row.model_name || null,
+        modification_name: row.modification_name || null,
+        modification_id: row.modification_id || null,
+        tech_param_id: row.tech_param_id || null,
+        configuration_id: row.configuration_id || null,
+        body_type: row.body_type || null,
+        engine_volume: typeof row.engine_volume === 'number' ? row.engine_volume : (parseFloat(row.engine_volume) || null),
+        hp: typeof row.hp === 'number' ? row.hp : (parseInt(row.hp) || null),
+        transmission: row.transmission || null,
+        drive_type: row.drive_type || null,
+        engine_type: row.engine_type || null,
+        year: typeof row.year === 'number' ? row.year : (parseInt(row.year) || null),
+        year_from: typeof row.year_from === 'number' ? row.year_from : (parseInt(row.year_from) || null),
+        year_to: typeof row.year_to === 'number' ? row.year_to : (parseInt(row.year_to) || null),
+        price: typeof row.price === 'number' ? row.price : (parseInt(row.price) || null)
       };
-
-      // Validate numeric fields
-      if (row.engine_volume && isNaN(parseFloat(row.engine_volume))) {
-        errors.push({ row: rowNum, error: `Invalid engine_volume: '${row.engine_volume}'` });
-        continue;
-      }
-      if (row.hp && isNaN(parseInt(row.hp))) {
-        errors.push({ row: rowNum, error: `Invalid hp: '${row.hp}'` });
-        continue;
-      }
-      if (row.year && isNaN(parseInt(row.year))) {
-        errors.push({ row: rowNum, error: `Invalid year: '${row.year}'` });
-        continue;
-      }
-      if (row.price && isNaN(parseInt(row.price))) {
-        errors.push({ row: rowNum, error: `Invalid price: '${row.price}'` });
-        continue;
-      }
 
       // Insert into database
       try {
