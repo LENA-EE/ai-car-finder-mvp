@@ -1,12 +1,12 @@
 // TODO: остальное из architecture.txt
 // - TypeScript миграция
 // - JWT аутентификация
-// - gpt-4o-mini интеграция
 // - Rate limiting
 
 const express = require('express');
 const cors = require('cors');
 const { Pool } = require('pg');
+const OpenAI = require('openai');
 
 const app = express();
 app.use(cors());
@@ -18,15 +18,62 @@ const pool = new Pool({
   ssl: process.env.NODE_ENV === 'production' ? { rejectUnauthorized: false } : false
 });
 
+// OpenRouter client (OpenAI-compatible API)
+const openai = new OpenAI({
+  apiKey: process.env.OPENROUTER_API_KEY,
+  baseURL: 'https://openrouter.ai/api/v1'
+});
+
+// Проверка доступности LLM
+const LLM_ENABLED = !!process.env.OPENROUTER_API_KEY;
+
 // Кэш синонимов и конфига (обновляется при старте и hot reload)
 let SYNONYMS = {};
 let promptConfig = {
   version: 1,
-  system_prompt: 'Ты парсер запросов для каталога Auto.ru. Преобразуй текст в JSON фильтры.',
+  system_prompt: `Ты парсер запросов для каталога Auto.ru.
+
+СТРУКТУРА БД:
+- mark_name: марка (BMW, Toyota, Mercedes-Benz)
+- folder_name: модель (X5, RAV4, Camry)
+- body_type: тип кузова (Внедорожник 5 дв., Седан, Хэтчбек)
+- engine_volume_min/max: объём двигателя (2.0, 3.0)
+- engine_type: тип двигателя (diesel, gasoline)
+- min_hp/max_hp: мощность (150, 249)
+- transmission: КПП (AT, MT, CVT)
+- drive_type: привод (4WD, FWD, RWD)
+- year_from/year_to: год выпуска (2019, 2020)
+- price_min/price_max: цена в рублях (2000000, 5000000)
+
+Сленг:
+- бумер, бмв → BMW
+- мерс, мерседес → Mercedes-Benz
+- тойота → Toyota
+- ауди → Audi
+- лексус → Lexus
+
+Преобразуй текст пользователя в JSON-фильтры.
+Возвращай ТОЛЬКО валидный JSON без комментариев!`,
   temperature: 0.1,
   max_tokens: 200,
   updated_at: new Date().toISOString()
 };
+
+// Few-shot примеры для промпта
+const FEW_SHOT_EXAMPLES = [
+  {
+    input: "бумер X5 дизель 3.0",
+    output: { mark_name: "BMW", folder_name: "X5", engine_type: "diesel", engine_volume_min: 3.0 }
+  },
+  {
+    input: "тойота внедорожник автомат",
+    output: { mark_name: "Toyota", body_type: "Внедорожник 5 дв.", transmission: "AT" }
+  },
+  {
+    input: "мерс до 5 миллионов 2020",
+    output: { mark_name: "Mercedes-Benz", price_max: 5000000, year_from: 2020 }
+  }
+];
 
 // Загрузка синонимов из БД
 async function loadSynonyms() {
@@ -53,6 +100,7 @@ async function loadPromptConfig() {
     if (result.rows.length > 0) {
       const row = result.rows[0];
       promptConfig = {
+        ...promptConfig,
         version: row.version,
         system_prompt: row.system_prompt,
         temperature: row.temperature,
@@ -66,8 +114,44 @@ async function loadPromptConfig() {
   }
 }
 
-// Мок-парсер (TODO: заменить на gpt-4o-mini)
-function mockParse(query) {
+// LLM парсер (gpt-4o-mini)
+async function llmParse(query) {
+  // Формируем few-shot промпт
+  const fewShotMessages = FEW_SHOT_EXAMPLES.flatMap(ex => [
+    { role: 'user', content: ex.input },
+    { role: 'assistant', content: JSON.stringify(ex.output) }
+  ]);
+
+  const messages = [
+    { role: 'system', content: promptConfig.system_prompt },
+    ...fewShotMessages,
+    { role: 'user', content: query }
+  ];
+
+  const response = await openai.chat.completions.create({
+    model: 'deepseek/deepseek-chat',
+    messages,
+    temperature: promptConfig.temperature,
+    max_tokens: promptConfig.max_tokens,
+    response_format: { type: 'json_object' }
+  });
+
+  const content = response.choices[0].message.content;
+  const filters = JSON.parse(content);
+
+  // Расчёт стоимости (deepseek-chat: $0.14/1M input, $0.28/1M output)
+  const inputTokens = response.usage?.prompt_tokens || 0;
+  const outputTokens = response.usage?.completion_tokens || 0;
+  const costUsd = (inputTokens * 0.00000014) + (outputTokens * 0.00000028);
+
+  return {
+    filters: Object.keys(filters).length > 0 ? filters : null,
+    costUsd: Math.round(costUsd * 100000000) / 100000000 // 8 decimal places
+  };
+}
+
+// Fallback парсер (keyword-based)
+function keywordParse(query) {
   const q = query.toLowerCase();
   const filters = {};
 
@@ -90,6 +174,25 @@ function mockParse(query) {
   // Объём двигателя
   const volumeMatch = q.match(/(\d+\.?\d*)\s*(л|l|литр)/);
   if (volumeMatch) filters.engine_volume_min = parseFloat(volumeMatch[1]);
+
+  // Цена
+  const priceMatch = q.match(/до\s*(\d+)\s*(млн|миллион)/i);
+  if (priceMatch) filters.price_max = parseInt(priceMatch[1]) * 1000000;
+
+  // Год
+  const yearMatch = q.match(/(20\d{2})/);
+  if (yearMatch) filters.year_from = parseInt(yearMatch[1]);
+
+  // Кузов
+  if (q.includes('внедорожник') || q.includes('джип')) filters.body_type = 'Внедорожник 5 дв.';
+  if (q.includes('седан')) filters.body_type = 'Седан';
+
+  // Привод
+  if (q.includes('полный привод') || q.includes('4wd')) filters.drive_type = '4WD';
+
+  // КПП
+  if (q.includes('автомат') || q.includes('акпп')) filters.transmission = 'AT';
+  if (q.includes('механика') || q.includes('мкпп')) filters.transmission = 'MT';
 
   return Object.keys(filters).length >= 1 ? filters : null;
 }
@@ -121,6 +224,66 @@ async function searchCars(filters) {
   if (filters.engine_volume_min) {
     conditions.push(`engine_volume >= $${paramIndex}`);
     params.push(filters.engine_volume_min);
+    paramIndex++;
+  }
+
+  if (filters.engine_volume_max) {
+    conditions.push(`engine_volume <= $${paramIndex}`);
+    params.push(filters.engine_volume_max);
+    paramIndex++;
+  }
+
+  if (filters.body_type) {
+    conditions.push(`body_type ILIKE $${paramIndex}`);
+    params.push(`%${filters.body_type}%`);
+    paramIndex++;
+  }
+
+  if (filters.transmission) {
+    conditions.push(`transmission = $${paramIndex}`);
+    params.push(filters.transmission);
+    paramIndex++;
+  }
+
+  if (filters.drive_type) {
+    conditions.push(`drive_type = $${paramIndex}`);
+    params.push(filters.drive_type);
+    paramIndex++;
+  }
+
+  if (filters.year_from) {
+    conditions.push(`year >= $${paramIndex}`);
+    params.push(filters.year_from);
+    paramIndex++;
+  }
+
+  if (filters.year_to) {
+    conditions.push(`year <= $${paramIndex}`);
+    params.push(filters.year_to);
+    paramIndex++;
+  }
+
+  if (filters.price_min) {
+    conditions.push(`price >= $${paramIndex}`);
+    params.push(filters.price_min);
+    paramIndex++;
+  }
+
+  if (filters.price_max) {
+    conditions.push(`price <= $${paramIndex}`);
+    params.push(filters.price_max);
+    paramIndex++;
+  }
+
+  if (filters.min_hp) {
+    conditions.push(`hp >= $${paramIndex}`);
+    params.push(filters.min_hp);
+    paramIndex++;
+  }
+
+  if (filters.max_hp) {
+    conditions.push(`hp <= $${paramIndex}`);
+    params.push(filters.max_hp);
     paramIndex++;
   }
 
@@ -164,9 +327,31 @@ app.post('/api/v1/parse', async (req, res) => {
   }
 
   const startTime = Date.now();
-  const filters = mockParse(query);
-  let results = [];
+  let filters = null;
+  let parsingMethod = 'keyword';
+  let costUsd = 0;
 
+  // Пробуем LLM если доступен
+  if (LLM_ENABLED) {
+    try {
+      const llmResult = await llmParse(query);
+      filters = llmResult.filters;
+      costUsd = llmResult.costUsd;
+      parsingMethod = 'llm';
+      console.log(`LLM parsed: ${JSON.stringify(filters)}, cost: $${costUsd}`);
+    } catch (err) {
+      console.error('LLM parse error, falling back to keyword:', err.message);
+      // Fallback на keyword parser
+      filters = keywordParse(query);
+      parsingMethod = 'keyword';
+    }
+  } else {
+    // LLM недоступен - используем keyword parser
+    filters = keywordParse(query);
+    parsingMethod = 'keyword';
+  }
+
+  let results = [];
   if (filters) {
     try {
       results = await searchCars(filters);
@@ -176,10 +361,9 @@ app.post('/api/v1/parse', async (req, res) => {
   }
 
   const latencyMs = Date.now() - startTime;
-  const costUsd = 0.00006;
 
   // Логируем в БД асинхронно
-  logParseSession(query, filters, 'mock', latencyMs, costUsd, results.length);
+  logParseSession(query, filters, parsingMethod, latencyMs, costUsd, results.length);
 
   res.json({
     success: filters !== null,
@@ -187,7 +371,7 @@ app.post('/api/v1/parse', async (req, res) => {
     filters,
     results,
     metrics: {
-      parsing_method: 'mock',
+      parsing_method: parsingMethod,
       latency_ms: latencyMs,
       cost_usd: costUsd
     }
@@ -230,6 +414,16 @@ app.get('/api/v1/admin/analytics', async (req, res) => {
       WHERE created_at >= CURRENT_DATE
     `);
 
+    // Разбивка по методам парсинга
+    const methodStats = await pool.query(`
+      SELECT
+        parsing_method,
+        COUNT(*) as count
+      FROM parse_sessions
+      WHERE created_at >= CURRENT_DATE
+      GROUP BY parsing_method
+    `);
+
     // Top 5 марок за сегодня
     const topBrands = await pool.query(`
       SELECT
@@ -251,6 +445,11 @@ app.get('/api/v1/admin/analytics', async (req, res) => {
     const successfulParses = parseInt(stats.successful_parses) || 0;
     const accuracy = requests > 0 ? successfulParses / requests : 0;
 
+    const methodBreakdown = {};
+    for (const row of methodStats.rows) {
+      methodBreakdown[row.parsing_method] = parseInt(row.count);
+    }
+
     const topBrandsWithShare = topBrands.rows.map(b => ({
       name: b.name,
       count: parseInt(b.count),
@@ -261,13 +460,15 @@ app.get('/api/v1/admin/analytics', async (req, res) => {
       today: {
         requests,
         parsing_accuracy: Math.round(accuracy * 1000) / 1000,
-        llm_cost_usd: parseFloat(stats.total_cost) || 0
+        llm_cost_usd: parseFloat(stats.total_cost) || 0,
+        methods: methodBreakdown
       },
       top_brands: topBrandsWithShare,
       catalog: {
         total_records: parseInt(catalogSize.rows[0].total),
         last_updated: new Date().toISOString()
-      }
+      },
+      llm_enabled: LLM_ENABLED
     });
   } catch (err) {
     console.error('Analytics error:', err.message);
@@ -279,7 +480,8 @@ app.get('/api/v1/admin/analytics', async (req, res) => {
 app.get('/api/v1/admin/prompts', async (req, res) => {
   res.json({
     ...promptConfig,
-    synonyms: SYNONYMS
+    synonyms: SYNONYMS,
+    llm_enabled: LLM_ENABLED
   });
 });
 
@@ -344,6 +546,7 @@ app.get('/health', async (req, res) => {
     res.json({
       status: 'healthy',
       database: 'connected',
+      llm_enabled: LLM_ENABLED,
       catalog_status: 'loaded',
       catalog_size: parseInt(result.rows[0].total)
     });
@@ -351,6 +554,7 @@ app.get('/health', async (req, res) => {
     res.status(503).json({
       status: 'unhealthy',
       database: 'disconnected',
+      llm_enabled: LLM_ENABLED,
       error: err.message
     });
   }
@@ -366,6 +570,12 @@ async function init() {
   } catch (err) {
     console.error('Database connection failed:', err.message);
     console.log('Running without database (mock mode)');
+  }
+
+  if (LLM_ENABLED) {
+    console.log('OpenRouter LLM enabled (deepseek/deepseek-chat)');
+  } else {
+    console.log('OpenRouter LLM disabled (no API key), using keyword parser');
   }
 }
 
