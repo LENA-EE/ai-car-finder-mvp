@@ -462,3 +462,99 @@ h1 {
   background: #475569;
   cursor: not-allowed;
 }
+
+/* Header with user info */
+.header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 24px;
+}
+
+.header h1 {
+  margin: 0;
+}
+
+.user-info {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  font-size: 14px;
+  color: #94a3b8;
+}
+
+.logout-btn {
+  padding: 6px 12px;
+  background: #475569;
+  border: none;
+  border-radius: 4px;
+  color: #e2e8f0;
+  font-size: 12px;
+  cursor: pointer;
+  transition: background 0.2s;
+}
+
+.logout-btn:hover {
+  background: #ef4444;
+}
+
+/* Login Form */
+.login-form {
+  background: #1e293b;
+  border-radius: 8px;
+  padding: 32px;
+  max-width: 400px;
+  margin: 40px auto;
+}
+
+.login-form h2 {
+  text-align: center;
+  color: #e2e8f0;
+  margin-bottom: 24px;
+  font-size: 20px;
+}
+
+.login-form form {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.login-form input {
+  padding: 12px;
+  background: #0f172a;
+  border: 1px solid #334155;
+  border-radius: 6px;
+  color: #e2e8f0;
+  font-size: 16px;
+}
+
+.login-form input:focus {
+  outline: none;
+  border-color: #3b82f6;
+}
+
+.login-form button {
+  padding: 12px;
+  background: #3b82f6;
+  border: none;
+  border-radius: 6px;
+  color: white;
+  font-weight: bold;
+  font-size: 16px;
+  cursor: pointer;
+  transition: background 0.2s;
+}
+
+.login-form button:hover {
+  background: #2563eb;
+}
+
+.login-form button:disabled {
+  background: #475569;
+  cursor: not-allowed;
+}
+
+.login-form .error {
+  margin: 0;
+}

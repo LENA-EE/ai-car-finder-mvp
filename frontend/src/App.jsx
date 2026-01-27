@@ -1,12 +1,105 @@
 // TODO: остальное из architecture.txt
 // - История 10 диалогов (localStorage)
 // - Tailwind CSS
-// - JWT аутентификация
 
 import { useState, useEffect } from "react";
 import "./App.css";
 
 const API_URL = import.meta.env.VITE_API_URL || "http://localhost:3002";
+
+// Auth helper functions
+const getToken = () => localStorage.getItem("token");
+const setToken = (token) => localStorage.setItem("token", token);
+const removeToken = () => localStorage.removeItem("token");
+const getUser = () => {
+  const user = localStorage.getItem("user");
+  return user ? JSON.parse(user) : null;
+};
+const setUser = (user) => localStorage.setItem("user", JSON.stringify(user));
+const removeUser = () => localStorage.removeItem("user");
+
+// Fetch with auth header
+const authFetch = async (url, options = {}) => {
+  const token = getToken();
+  const headers = {
+    "Content-Type": "application/json",
+    ...options.headers,
+  };
+  if (token) {
+    headers["Authorization"] = `Bearer ${token}`;
+  }
+  const res = await fetch(url, { ...options, headers });
+  if (res.status === 401 || res.status === 403) {
+    removeToken();
+    removeUser();
+    window.location.reload();
+  }
+  return res;
+};
+
+// Компонент Login
+function LoginForm({ onLogin }) {
+  const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState(null);
+
+  const handleSubmit = async (e) => {
+    e.preventDefault();
+    setLoading(true);
+    setError(null);
+
+    try {
+      const res = await fetch(`${API_URL}/api/v1/admin/auth/login`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ email, password }),
+      });
+
+      const data = await res.json();
+
+      if (!res.ok) {
+        setError(data.details || "Ошибка авторизации");
+        return;
+      }
+
+      setToken(data.token);
+      setUser(data.user);
+      onLogin(data.user);
+    } catch (err) {
+      setError(`Ошибка соединения: ${err.message}`);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  return (
+    <div className="login-form">
+      <h2>Вход в админ-панель</h2>
+      <form onSubmit={handleSubmit}>
+        <input
+          type="email"
+          value={email}
+          onChange={(e) => setEmail(e.target.value)}
+          placeholder="Email"
+          required
+        />
+        <input
+          type="password"
+          value={password}
+          onChange={(e) => setPassword(e.target.value)}
+          placeholder="Пароль"
+          required
+        />
+        <button type="submit" disabled={loading}>
+          {loading ? "Вход..." : "Войти"}
+        </button>
+        {error && <div className="error">{error}</div>}
+      </form>
+    </div>
+  );
+}
+
 // Компонент User Search
 function UserSearch() {
   const [query, setQuery] = useState("");
@@ -171,7 +264,7 @@ function AdminDashboard() {
 
   const fetchAnalytics = async () => {
     try {
-      const res = await fetch(`${API_URL}/api/v1/admin/analytics`);
+      const res = await authFetch(`${API_URL}/api/v1/admin/analytics`);
       const data = await res.json();
       setAnalytics(data);
     } catch (err) {
@@ -183,7 +276,7 @@ function AdminDashboard() {
 
   useEffect(() => {
     fetchAnalytics();
-    const interval = setInterval(fetchAnalytics, 5000); // Auto-refresh
+    const interval = setInterval(fetchAnalytics, 5000);
     return () => clearInterval(interval);
   }, []);
 
@@ -249,7 +342,7 @@ function PromptEditor() {
 
   const fetchConfig = async () => {
     try {
-      const res = await fetch(`${API_URL}/api/v1/admin/prompts`);
+      const res = await authFetch(`${API_URL}/api/v1/admin/prompts`);
       const data = await res.json();
       setConfig(data);
     } catch (err) {
@@ -267,9 +360,8 @@ function PromptEditor() {
     setSaving(true);
     setMessage(null);
     try {
-      const res = await fetch(`${API_URL}/api/v1/admin/prompts`, {
+      const res = await authFetch(`${API_URL}/api/v1/admin/prompts`, {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           system_prompt: config.system_prompt,
           temperature: config.temperature,
@@ -277,8 +369,12 @@ function PromptEditor() {
         }),
       });
       const data = await res.json();
-      setMessage(`Сохранено! Версия ${data.current_version}`);
-      fetchConfig();
+      if (res.ok) {
+        setMessage(`Сохранено! Версия ${data.current_version}`);
+        fetchConfig();
+      } else {
+        setMessage(`Ошибка: ${data.details || data.error}`);
+      }
     } catch (err) {
       setMessage(`Ошибка: ${err.message}`);
     } finally {
@@ -290,15 +386,16 @@ function PromptEditor() {
     if (!newSynonym.key || !newSynonym.value) return;
     setSaving(true);
     try {
-      await fetch(`${API_URL}/api/v1/admin/prompts`, {
+      const res = await authFetch(`${API_URL}/api/v1/admin/prompts`, {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           synonyms: { [newSynonym.key]: newSynonym.value },
         }),
       });
-      setNewSynonym({ key: "", value: "" });
-      fetchConfig();
+      if (res.ok) {
+        setNewSynonym({ key: "", value: "" });
+        fetchConfig();
+      }
     } finally {
       setSaving(false);
     }
@@ -390,10 +487,36 @@ function PromptEditor() {
 // Главный компонент с навигацией
 function App() {
   const [page, setPage] = useState("user");
+  const [user, setUser] = useState(getUser());
+
+  const handleLogin = (userData) => {
+    setUser(userData);
+  };
+
+  const handleLogout = () => {
+    removeToken();
+    removeUser();
+    setUser(null);
+    setPage("user");
+  };
+
+  // Если админ-страница и нет авторизации - показать логин
+  const needsAuth = page === "admin" || page === "prompts";
+  const isAuthed = !!user;
 
   return (
     <div className="container">
-      <h1>AI Car Finder</h1>
+      <div className="header">
+        <h1>AI Car Finder</h1>
+        {user && (
+          <div className="user-info">
+            <span>{user.email}</span>
+            <button className="logout-btn" onClick={handleLogout}>
+              Выйти
+            </button>
+          </div>
+        )}
+      </div>
 
       <div className="nav">
         <button
@@ -417,8 +540,9 @@ function App() {
       </div>
 
       {page === "user" && <UserSearch />}
-      {page === "admin" && <AdminDashboard />}
-      {page === "prompts" && <PromptEditor />}
+      {needsAuth && !isAuthed && <LoginForm onLogin={handleLogin} />}
+      {page === "admin" && isAuthed && <AdminDashboard />}
+      {page === "prompts" && isAuthed && <PromptEditor />}
     </div>
   );
 }
