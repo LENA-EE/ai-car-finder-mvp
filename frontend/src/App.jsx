@@ -100,6 +100,40 @@ function LoginForm({ onLogin }) {
   );
 }
 
+// История запросов в localStorage
+const HISTORY_KEY = "search_history";
+const MAX_HISTORY = 10;
+
+const getHistory = () => {
+  try {
+    const history = localStorage.getItem(HISTORY_KEY);
+    return history ? JSON.parse(history) : [];
+  } catch {
+    return [];
+  }
+};
+
+const addToHistory = (query) => {
+  const trimmed = query.trim();
+  if (!trimmed) return;
+
+  let history = getHistory();
+  // Удаляем дубликат если есть
+  history = history.filter(h => h.query !== trimmed);
+  // Добавляем в начало
+  history.unshift({
+    query: trimmed,
+    timestamp: Date.now()
+  });
+  // Оставляем только 10 последних
+  history = history.slice(0, MAX_HISTORY);
+  localStorage.setItem(HISTORY_KEY, JSON.stringify(history));
+};
+
+const clearHistory = () => {
+  localStorage.removeItem(HISTORY_KEY);
+};
+
 // Компонент User Search
 function UserSearch() {
   const [query, setQuery] = useState("");
@@ -107,20 +141,24 @@ function UserSearch() {
   const [result, setResult] = useState(null);
   const [error, setError] = useState(null);
   const [selectedCar, setSelectedCar] = useState(null);
+  const [history, setHistory] = useState(getHistory());
+  const [showHistory, setShowHistory] = useState(false);
 
   // POST /api/v1/parse
-  const handleSearch = async () => {
-    if (!query.trim()) return;
+  const handleSearch = async (searchQuery = query) => {
+    const q = searchQuery.trim();
+    if (!q) return;
 
     setLoading(true);
     setError(null);
     setResult(null);
+    setShowHistory(false);
 
     try {
       const res = await fetch(`${API_URL}/api/v1/parse`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ query }),
+        body: JSON.stringify({ query: q }),
       });
 
       const data = await res.json();
@@ -129,11 +167,25 @@ function UserSearch() {
         return;
       }
       setResult(data);
+      // Сохраняем в историю только успешные запросы
+      addToHistory(q);
+      setHistory(getHistory());
     } catch (err) {
       setError(`Ошибка соединения: ${err.message}`);
     } finally {
       setLoading(false);
     }
+  };
+
+  const handleHistoryClick = (historyQuery) => {
+    setQuery(historyQuery);
+    handleSearch(historyQuery);
+  };
+
+  const handleClearHistory = () => {
+    clearHistory();
+    setHistory([]);
+    setShowHistory(false);
   };
 
   // GET /api/v1/cars/:id
@@ -155,13 +207,42 @@ function UserSearch() {
           value={query}
           onChange={(e) => setQuery(e.target.value)}
           onKeyPress={(e) => e.key === "Enter" && handleSearch()}
+          onFocus={() => history.length > 0 && setShowHistory(true)}
           placeholder="bmw x5 diesel"
           disabled={loading}
         />
-        <button onClick={handleSearch} disabled={loading}>
+        <button onClick={() => handleSearch()} disabled={loading}>
           {loading ? "Поиск..." : "Найти"}
         </button>
       </div>
+
+      {showHistory && history.length > 0 && (
+        <div className="history-dropdown">
+          <div className="history-header">
+            <span>История запросов</span>
+            <button className="history-clear" onClick={handleClearHistory}>
+              Очистить
+            </button>
+          </div>
+          <div className="history-list">
+            {history.map((item, i) => (
+              <div
+                key={i}
+                className="history-item"
+                onClick={() => handleHistoryClick(item.query)}
+              >
+                <span className="history-query">{item.query}</span>
+                <span className="history-time">
+                  {new Date(item.timestamp).toLocaleTimeString('ru-RU', {
+                    hour: '2-digit',
+                    minute: '2-digit'
+                  })}
+                </span>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
 
       {error && <div className="error">{error}</div>}
 
