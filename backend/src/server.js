@@ -410,6 +410,24 @@ async function logParseSession(query, filters, method, latencyMs, costUsd, resul
   }
 }
 
+// Логирование проблемных запросов в "кладбище ошибок"
+async function logErrorToGraveyard(query, errorType) {
+  try {
+    // Нормализуем запрос для группировки похожих
+    const pattern = query.toLowerCase().trim();
+
+    await pool.query(
+      `INSERT INTO error_graveyard (error_type, query_pattern, frequency, last_seen)
+       VALUES ($1, $2, 1, NOW())
+       ON CONFLICT (error_type, query_pattern)
+       DO UPDATE SET frequency = error_graveyard.frequency + 1, last_seen = NOW()`,
+      [errorType, pattern]
+    );
+  } catch (err) {
+    console.error('Failed to log error to graveyard:', err.message);
+  }
+}
+
 // ===========================================
 // PUBLIC API
 // ===========================================
@@ -445,16 +463,31 @@ app.post('/api/v1/parse', userRateLimiter, async (req, res) => {
   }
 
   let results = [];
+  let errorType = null;
+
   if (filters) {
     try {
       results = await searchCars(filters);
+      // Если фильтры есть, но результатов нет - возможно неизвестная марка
+      if (results.length === 0 && filters.mark_name) {
+        errorType = 'no_results';
+      }
     } catch (err) {
       console.error('Search error:', err.message);
+      errorType = 'search_error';
     }
+  } else {
+    // Не удалось распарсить запрос
+    errorType = 'parse_failed';
   }
 
   const latencyMs = Date.now() - startTime;
   logParseSession(query, filters, parsingMethod, latencyMs, costUsd, results.length);
+
+  // Логируем проблемные запросы
+  if (errorType) {
+    logErrorToGraveyard(query, errorType);
+  }
 
   res.json({
     success: filters !== null,
@@ -731,6 +764,107 @@ app.get('/api/v1/admin/audit', adminRateLimiter, authenticateToken, requireAdmin
     res.json(result.rows);
   } catch (err) {
     console.error('Audit log error:', err.message);
+    res.status(500).json({ error: 'DB_ERROR', details: err.message });
+  }
+});
+
+// ===========================================
+// ERROR GRAVEYARD API
+// ===========================================
+
+// GET /api/v1/admin/errors - список проблемных запросов
+app.get('/api/v1/admin/errors', adminRateLimiter, authenticateToken, async (req, res) => {
+  try {
+    const showResolved = req.query.resolved === 'true';
+    const limit = Math.min(parseInt(req.query.limit) || 50, 100);
+
+    const result = await pool.query(
+      `SELECT id, error_type, query_pattern, frequency, last_seen, resolved, resolution_note
+       FROM error_graveyard
+       WHERE resolved = $1
+       ORDER BY frequency DESC, last_seen DESC
+       LIMIT $2`,
+      [showResolved, limit]
+    );
+
+    // Статистика
+    const stats = await pool.query(`
+      SELECT
+        COUNT(*) FILTER (WHERE NOT resolved) as unresolved_count,
+        COUNT(*) FILTER (WHERE resolved) as resolved_count,
+        SUM(frequency) FILTER (WHERE NOT resolved) as total_occurrences,
+        COUNT(DISTINCT error_type) FILTER (WHERE NOT resolved) as error_types
+      FROM error_graveyard
+    `);
+
+    res.json({
+      errors: result.rows,
+      stats: {
+        unresolved: parseInt(stats.rows[0].unresolved_count) || 0,
+        resolved: parseInt(stats.rows[0].resolved_count) || 0,
+        total_occurrences: parseInt(stats.rows[0].total_occurrences) || 0,
+        error_types: parseInt(stats.rows[0].error_types) || 0
+      }
+    });
+  } catch (err) {
+    console.error('Error graveyard fetch error:', err.message);
+    res.status(500).json({ error: 'DB_ERROR', details: err.message });
+  }
+});
+
+// POST /api/v1/admin/errors/:id/resolve - пометить как решённую
+app.post('/api/v1/admin/errors/:id/resolve', adminRateLimiter, authenticateToken, requireAdmin, async (req, res) => {
+  const id = parseInt(req.params.id);
+  const { resolution_note } = req.body;
+
+  try {
+    const result = await pool.query(
+      `UPDATE error_graveyard
+       SET resolved = true, resolution_note = $1
+       WHERE id = $2
+       RETURNING id, error_type, query_pattern, resolved`,
+      [resolution_note || 'Resolved', id]
+    );
+
+    if (result.rows.length === 0) {
+      return res.status(404).json({ error: 'NOT_FOUND', details: 'Error not found' });
+    }
+
+    await logAdminAction(req.user.id, req.user.email, 'resolve_error', {
+      error_id: id,
+      query_pattern: result.rows[0].query_pattern,
+      resolution_note
+    }, req);
+
+    res.json({ success: true, error: result.rows[0] });
+  } catch (err) {
+    console.error('Error resolve error:', err.message);
+    res.status(500).json({ error: 'DB_ERROR', details: err.message });
+  }
+});
+
+// DELETE /api/v1/admin/errors/:id - удалить запись об ошибке
+app.delete('/api/v1/admin/errors/:id', adminRateLimiter, authenticateToken, requireAdmin, async (req, res) => {
+  const id = parseInt(req.params.id);
+
+  try {
+    const result = await pool.query(
+      `DELETE FROM error_graveyard WHERE id = $1 RETURNING id, query_pattern`,
+      [id]
+    );
+
+    if (result.rows.length === 0) {
+      return res.status(404).json({ error: 'NOT_FOUND', details: 'Error not found' });
+    }
+
+    await logAdminAction(req.user.id, req.user.email, 'delete_error', {
+      error_id: id,
+      query_pattern: result.rows[0].query_pattern
+    }, req);
+
+    res.json({ success: true, deleted_id: id });
+  } catch (err) {
+    console.error('Error delete error:', err.message);
     res.status(500).json({ error: 'DB_ERROR', details: err.message });
   }
 });

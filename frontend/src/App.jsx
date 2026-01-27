@@ -801,6 +801,204 @@ function PromptEditor() {
   );
 }
 
+// Компонент Error Graveyard - "Кладбище ошибок"
+function ErrorGraveyard() {
+  const [errors, setErrors] = useState([]);
+  const [stats, setStats] = useState({});
+  const [loading, setLoading] = useState(true);
+  const [showResolved, setShowResolved] = useState(false);
+  const [resolveNote, setResolveNote] = useState("");
+  const [resolvingId, setResolvingId] = useState(null);
+
+  const fetchErrors = async () => {
+    try {
+      const res = await authFetch(
+        `${API_URL}/api/v1/admin/errors?resolved=${showResolved}`
+      );
+      const data = await res.json();
+      setErrors(data.errors || []);
+      setStats(data.stats || {});
+    } catch (err) {
+      console.error("Errors fetch error:", err);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    fetchErrors();
+  }, [showResolved]);
+
+  const handleResolve = async (id) => {
+    try {
+      const res = await authFetch(`${API_URL}/api/v1/admin/errors/${id}/resolve`, {
+        method: "POST",
+        body: JSON.stringify({ resolution_note: resolveNote }),
+      });
+      if (res.ok) {
+        setResolvingId(null);
+        setResolveNote("");
+        fetchErrors();
+      }
+    } catch (err) {
+      console.error("Resolve error:", err);
+    }
+  };
+
+  const handleDelete = async (id) => {
+    if (!window.confirm("Удалить эту запись об ошибке?")) return;
+    try {
+      const res = await authFetch(`${API_URL}/api/v1/admin/errors/${id}`, {
+        method: "DELETE",
+      });
+      if (res.ok) {
+        fetchErrors();
+      }
+    } catch (err) {
+      console.error("Delete error:", err);
+    }
+  };
+
+  const getErrorTypeLabel = (type) => {
+    const labels = {
+      parse_failed: "Не распознан",
+      no_results: "Нет результатов",
+      search_error: "Ошибка поиска",
+      unknown_brand: "Неизвестная марка",
+      ambiguous_query: "Неоднозначный запрос",
+    };
+    return labels[type] || type;
+  };
+
+  const getErrorTypeColor = (type) => {
+    const colors = {
+      parse_failed: "#ef4444",
+      no_results: "#f59e0b",
+      search_error: "#ef4444",
+      unknown_brand: "#8b5cf6",
+      ambiguous_query: "#3b82f6",
+    };
+    return colors[type] || "#64748b";
+  };
+
+  if (loading) return <div className="loading">Загрузка...</div>;
+
+  return (
+    <div className="error-graveyard">
+      <div className="graveyard-stats">
+        <div className="stat-item">
+          <span className="stat-value error">{stats.unresolved || 0}</span>
+          <span className="stat-label">Активных</span>
+        </div>
+        <div className="stat-item">
+          <span className="stat-value">{stats.total_occurrences || 0}</span>
+          <span className="stat-label">Случаев</span>
+        </div>
+        <div className="stat-item">
+          <span className="stat-value">{stats.error_types || 0}</span>
+          <span className="stat-label">Типов</span>
+        </div>
+        <div className="stat-item">
+          <span className="stat-value success">{stats.resolved || 0}</span>
+          <span className="stat-label">Решено</span>
+        </div>
+      </div>
+
+      <div className="graveyard-filter">
+        <button
+          className={!showResolved ? "active" : ""}
+          onClick={() => setShowResolved(false)}
+        >
+          Активные
+        </button>
+        <button
+          className={showResolved ? "active" : ""}
+          onClick={() => setShowResolved(true)}
+        >
+          Решённые
+        </button>
+        <button className="refresh-btn" onClick={fetchErrors}>
+          Обновить
+        </button>
+      </div>
+
+      {errors.length === 0 ? (
+        <div className="no-errors">
+          {showResolved
+            ? "Нет решённых ошибок"
+            : "Отлично! Нет проблемных запросов"}
+        </div>
+      ) : (
+        <div className="errors-list">
+          {errors.map((err) => (
+            <div key={err.id} className="error-card">
+              <div className="error-header">
+                <span
+                  className="error-type"
+                  style={{ backgroundColor: getErrorTypeColor(err.error_type) }}
+                >
+                  {getErrorTypeLabel(err.error_type)}
+                </span>
+                <span className="error-frequency">x{err.frequency}</span>
+              </div>
+              <div className="error-query">{err.query_pattern}</div>
+              <div className="error-meta">
+                <span>
+                  Последний раз:{" "}
+                  {new Date(err.last_seen).toLocaleString("ru-RU")}
+                </span>
+              </div>
+              {err.resolved && err.resolution_note && (
+                <div className="error-resolution">
+                  Решение: {err.resolution_note}
+                </div>
+              )}
+              {!err.resolved && (
+                <div className="error-actions">
+                  {resolvingId === err.id ? (
+                    <div className="resolve-form">
+                      <input
+                        type="text"
+                        placeholder="Комментарий к решению..."
+                        value={resolveNote}
+                        onChange={(e) => setResolveNote(e.target.value)}
+                      />
+                      <button onClick={() => handleResolve(err.id)}>
+                        Сохранить
+                      </button>
+                      <button
+                        className="cancel"
+                        onClick={() => setResolvingId(null)}
+                      >
+                        Отмена
+                      </button>
+                    </div>
+                  ) : (
+                    <>
+                      <button
+                        className="resolve-btn"
+                        onClick={() => setResolvingId(err.id)}
+                      >
+                        Решить
+                      </button>
+                      <button
+                        className="delete-btn"
+                        onClick={() => handleDelete(err.id)}
+                      >
+                        Удалить
+                      </button>
+                    </>
+                  )}
+                </div>
+              )}
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
 // Главный компонент с навигацией
 function App() {
   const [page, setPage] = useState("user");
@@ -818,7 +1016,7 @@ function App() {
   };
 
   // Если админ-страница и нет авторизации - показать логин
-  const needsAuth = page === "admin" || page === "prompts" || page === "catalog";
+  const needsAuth = page === "admin" || page === "prompts" || page === "catalog" || page === "errors";
   const isAuthed = !!user;
 
   return (
@@ -860,6 +1058,12 @@ function App() {
         >
           Промпты
         </button>
+        <button
+          className={page === "errors" ? "active" : ""}
+          onClick={() => setPage("errors")}
+        >
+          Ошибки
+        </button>
       </div>
 
       {page === "user" && <UserSearch />}
@@ -867,6 +1071,7 @@ function App() {
       {page === "admin" && isAuthed && <AdminDashboard />}
       {page === "catalog" && isAuthed && <CatalogUpload />}
       {page === "prompts" && isAuthed && <PromptEditor />}
+      {page === "errors" && isAuthed && <ErrorGraveyard />}
     </div>
   );
 }

@@ -852,3 +852,201 @@ h1 {
   font-size: 11px;
   color: #64748b;
 }
+
+/* Error Graveyard */
+.error-graveyard {
+  background: #1e293b;
+  border-radius: 8px;
+  padding: 20px;
+}
+
+.graveyard-stats {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 12px;
+  margin-bottom: 20px;
+}
+
+.graveyard-stats .stat-item {
+  background: #334155;
+  border-radius: 6px;
+  padding: 16px;
+  text-align: center;
+}
+
+.graveyard-stats .stat-value {
+  display: block;
+  font-size: 24px;
+  font-weight: bold;
+  color: #e2e8f0;
+}
+
+.graveyard-stats .stat-value.error {
+  color: #ef4444;
+}
+
+.graveyard-stats .stat-value.success {
+  color: #22c55e;
+}
+
+.graveyard-stats .stat-label {
+  font-size: 11px;
+  color: #64748b;
+  margin-top: 4px;
+}
+
+.graveyard-filter {
+  display: flex;
+  gap: 8px;
+  margin-bottom: 16px;
+}
+
+.graveyard-filter button {
+  padding: 8px 16px;
+  background: #334155;
+  border: none;
+  border-radius: 6px;
+  color: #94a3b8;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.graveyard-filter button:hover {
+  background: #475569;
+}
+
+.graveyard-filter button.active {
+  background: #3b82f6;
+  color: white;
+}
+
+.graveyard-filter .refresh-btn {
+  margin-left: auto;
+}
+
+.no-errors {
+  text-align: center;
+  padding: 40px;
+  color: #64748b;
+  font-size: 14px;
+}
+
+.errors-list {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.error-card {
+  background: #334155;
+  border-radius: 8px;
+  padding: 16px;
+}
+
+.error-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 8px;
+}
+
+.error-type {
+  font-size: 11px;
+  font-weight: bold;
+  color: white;
+  padding: 4px 8px;
+  border-radius: 4px;
+}
+
+.error-frequency {
+  font-size: 14px;
+  font-weight: bold;
+  color: #f59e0b;
+}
+
+.error-query {
+  font-size: 16px;
+  color: #e2e8f0;
+  font-family: monospace;
+  padding: 8px 12px;
+  background: #1e293b;
+  border-radius: 4px;
+  margin-bottom: 8px;
+}
+
+.error-meta {
+  font-size: 11px;
+  color: #64748b;
+  margin-bottom: 8px;
+}
+
+.error-resolution {
+  font-size: 12px;
+  color: #22c55e;
+  padding: 8px;
+  background: rgba(34, 197, 94, 0.1);
+  border-radius: 4px;
+  margin-bottom: 8px;
+}
+
+.error-actions {
+  display: flex;
+  gap: 8px;
+}
+
+.error-actions button {
+  padding: 6px 12px;
+  border: none;
+  border-radius: 4px;
+  font-size: 12px;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.resolve-btn {
+  background: #22c55e;
+  color: white;
+}
+
+.resolve-btn:hover {
+  background: #16a34a;
+}
+
+.delete-btn {
+  background: #475569;
+  color: #e2e8f0;
+}
+
+.delete-btn:hover {
+  background: #ef4444;
+}
+
+.resolve-form {
+  display: flex;
+  gap: 8px;
+  flex: 1;
+}
+
+.resolve-form input {
+  flex: 1;
+  padding: 6px 10px;
+  background: #1e293b;
+  border: 1px solid #475569;
+  border-radius: 4px;
+  color: #e2e8f0;
+  font-size: 12px;
+}
+
+.resolve-form button {
+  padding: 6px 12px;
+  border: none;
+  border-radius: 4px;
+  font-size: 12px;
+  cursor: pointer;
+  background: #22c55e;
+  color: white;
+}
+
+.resolve-form button.cancel {
+  background: #475569;
+}
