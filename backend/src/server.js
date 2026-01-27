@@ -1,8 +1,8 @@
 // TODO: остальное из architecture.txt
 // - TypeScript миграция
-// - Rate limiting
 
 const express = require('express');
+const rateLimit = require('express-rate-limit');
 const cors = require('cors');
 const { Pool } = require('pg');
 const OpenAI = require('openai');
@@ -20,6 +20,52 @@ app.use(express.json());
 const upload = multer({
   storage: multer.memoryStorage(),
   limits: { fileSize: 50 * 1024 * 1024 }
+});
+
+// ===========================================
+// RATE LIMITING
+// ===========================================
+
+// User rate limit: 100 req/min (согласно architecture.txt)
+const userRateLimiter = rateLimit({
+  windowMs: 60 * 1000, // 1 minute
+  max: parseInt(process.env.RATE_LIMIT_USER) || 100,
+  message: {
+    error: 'RATE_LIMIT_EXCEEDED',
+    details: 'Too many requests, please try again later',
+    retry_after: 60
+  },
+  standardHeaders: true,
+  legacyHeaders: false,
+  keyGenerator: (req) => req.ip || req.connection.remoteAddress
+});
+
+// Admin rate limit: 50 req/min (согласно architecture.txt)
+const adminRateLimiter = rateLimit({
+  windowMs: 60 * 1000, // 1 minute
+  max: parseInt(process.env.RATE_LIMIT_ADMIN) || 50,
+  message: {
+    error: 'RATE_LIMIT_EXCEEDED',
+    details: 'Too many admin requests, please try again later',
+    retry_after: 60
+  },
+  standardHeaders: true,
+  legacyHeaders: false,
+  keyGenerator: (req) => req.user?.id || req.ip // По user ID если авторизован
+});
+
+// File upload rate limit: 1 req/5min (защита от спама загрузок)
+const uploadRateLimiter = rateLimit({
+  windowMs: 5 * 60 * 1000, // 5 minutes
+  max: 5,
+  message: {
+    error: 'RATE_LIMIT_EXCEEDED',
+    details: 'Too many file uploads, please wait 5 minutes',
+    retry_after: 300
+  },
+  standardHeaders: true,
+  legacyHeaders: false,
+  keyGenerator: (req) => req.user?.id || req.ip
 });
 
 // PostgreSQL connection
@@ -369,7 +415,7 @@ async function logParseSession(query, filters, method, latencyMs, costUsd, resul
 // ===========================================
 
 // POST /api/v1/parse - основной endpoint (публичный)
-app.post('/api/v1/parse', async (req, res) => {
+app.post('/api/v1/parse', userRateLimiter, async (req, res) => {
   const { query } = req.body;
 
   if (!query || query.length < 2) {
@@ -424,7 +470,7 @@ app.post('/api/v1/parse', async (req, res) => {
 });
 
 // GET /api/v1/cars/:id - детали машины (публичный)
-app.get('/api/v1/cars/:id', async (req, res) => {
+app.get('/api/v1/cars/:id', userRateLimiter, async (req, res) => {
   const id = parseInt(req.params.id);
 
   try {
@@ -472,7 +518,7 @@ app.get('/health', async (req, res) => {
 // ===========================================
 
 // POST /api/v1/admin/auth/login
-app.post('/api/v1/admin/auth/login', async (req, res) => {
+app.post('/api/v1/admin/auth/login', adminRateLimiter, async (req, res) => {
   const { email, password } = req.body;
 
   if (!email || !password) {
@@ -526,7 +572,7 @@ app.post('/api/v1/admin/auth/login', async (req, res) => {
 });
 
 // GET /api/v1/admin/auth/me - проверка токена
-app.get('/api/v1/admin/auth/me', authenticateToken, (req, res) => {
+app.get('/api/v1/admin/auth/me', adminRateLimiter, authenticateToken, (req, res) => {
   res.json({
     id: req.user.id,
     email: req.user.email,
@@ -539,7 +585,7 @@ app.get('/api/v1/admin/auth/me', authenticateToken, (req, res) => {
 // ===========================================
 
 // GET /api/v1/admin/analytics - дашборд
-app.get('/api/v1/admin/analytics', authenticateToken, async (req, res) => {
+app.get('/api/v1/admin/analytics', adminRateLimiter, authenticateToken, async (req, res) => {
   try {
     const todayStats = await pool.query(`
       SELECT
@@ -605,7 +651,7 @@ app.get('/api/v1/admin/analytics', authenticateToken, async (req, res) => {
 });
 
 // GET /api/v1/admin/prompts
-app.get('/api/v1/admin/prompts', authenticateToken, async (req, res) => {
+app.get('/api/v1/admin/prompts', adminRateLimiter, authenticateToken, async (req, res) => {
   res.json({
     ...promptConfig,
     synonyms: SYNONYMS,
@@ -614,7 +660,7 @@ app.get('/api/v1/admin/prompts', authenticateToken, async (req, res) => {
 });
 
 // POST /api/v1/admin/prompts - обновить промпт (только admin)
-app.post('/api/v1/admin/prompts', authenticateToken, requireAdmin, async (req, res) => {
+app.post('/api/v1/admin/prompts', adminRateLimiter, authenticateToken, requireAdmin, async (req, res) => {
   const { system_prompt, temperature, max_tokens, synonyms } = req.body;
 
   try {
@@ -672,7 +718,7 @@ app.post('/api/v1/admin/prompts', authenticateToken, requireAdmin, async (req, r
 });
 
 // GET /api/v1/admin/audit - аудит лог (только admin)
-app.get('/api/v1/admin/audit', authenticateToken, requireAdmin, async (req, res) => {
+app.get('/api/v1/admin/audit', adminRateLimiter, authenticateToken, requireAdmin, async (req, res) => {
   try {
     const limit = Math.min(parseInt(req.query.limit) || 50, 100);
     const result = await pool.query(
@@ -843,7 +889,7 @@ async function parseAutoRuXml(content) {
 // ===========================================
 
 // POST /api/v1/admin/catalog/upload - загрузка каталога CSV/XML (только admin)
-app.post('/api/v1/admin/catalog/upload', authenticateToken, requireAdmin, upload.single('file'), async (req, res) => {
+app.post('/api/v1/admin/catalog/upload', uploadRateLimiter, authenticateToken, requireAdmin, upload.single('file'), async (req, res) => {
   if (!req.file) {
     return res.status(400).json({ error: 'NO_FILE', details: 'CSV or XML file required' });
   }
@@ -984,7 +1030,7 @@ app.post('/api/v1/admin/catalog/upload', authenticateToken, requireAdmin, upload
 });
 
 // DELETE /api/v1/admin/catalog - очистить каталог (только admin)
-app.delete('/api/v1/admin/catalog', authenticateToken, requireAdmin, async (req, res) => {
+app.delete('/api/v1/admin/catalog', adminRateLimiter, authenticateToken, requireAdmin, async (req, res) => {
   try {
     const result = await pool.query('DELETE FROM cars_catalog');
     const deletedCount = result.rowCount;
