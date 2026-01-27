@@ -70,9 +70,9 @@ CREATE TABLE IF NOT EXISTS admin_users (
 );
 
 -- Default admin user (password: admin123 - change in production!)
--- bcrypt hash for 'admin123'
+-- bcryptjs hash for 'admin123' (10 rounds)
 INSERT INTO admin_users (email, password_hash, role)
-VALUES ('admin@ai-car-finder.app', '$2b$12$LQv3c1yqBWVHxkd0LHAkCOYz6TtxMQJqhN8/X4.Q7dHPHnJJ1xYBi', 'admin')
+VALUES ('admin@ai-car-finder.app', '$2a$10$ormhA5bh0IcDwfjhokD4kO20Ok8znI2rH7jWkME.sYHSNcfsRJgn2', 'admin')
 ON CONFLICT (email) DO NOTHING;
 
 -- ===========================================

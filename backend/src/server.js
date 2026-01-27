@@ -1,12 +1,13 @@
 // TODO: остальное из architecture.txt
 // - TypeScript миграция
-// - JWT аутентификация
 // - Rate limiting
 
 const express = require('express');
 const cors = require('cors');
 const { Pool } = require('pg');
 const OpenAI = require('openai');
+const jwt = require('jsonwebtoken');
+const bcrypt = require('bcryptjs');
 
 const app = express();
 app.use(cors());
@@ -23,6 +24,10 @@ const openai = new OpenAI({
   apiKey: process.env.OPENROUTER_API_KEY,
   baseURL: 'https://openrouter.ai/api/v1'
 });
+
+// JWT config
+const JWT_SECRET = process.env.JWT_SECRET || 'dev-jwt-secret-32-characters-long';
+const JWT_EXPIRES_IN = process.env.JWT_EXPIRES_IN || '24h';
 
 // Проверка доступности LLM
 const LLM_ENABLED = !!process.env.OPENROUTER_API_KEY;
@@ -75,6 +80,49 @@ const FEW_SHOT_EXAMPLES = [
   }
 ];
 
+// ===========================================
+// JWT MIDDLEWARE
+// ===========================================
+function authenticateToken(req, res, next) {
+  const authHeader = req.headers['authorization'];
+  const token = authHeader && authHeader.split(' ')[1]; // Bearer TOKEN
+
+  if (!token) {
+    return res.status(401).json({ error: 'UNAUTHENTICATED', details: 'Token required' });
+  }
+
+  jwt.verify(token, JWT_SECRET, (err, user) => {
+    if (err) {
+      return res.status(403).json({ error: 'FORBIDDEN', details: 'Invalid or expired token' });
+    }
+    req.user = user;
+    next();
+  });
+}
+
+// Middleware для проверки роли admin
+function requireAdmin(req, res, next) {
+  if (req.user.role !== 'admin') {
+    return res.status(403).json({ error: 'FORBIDDEN', details: 'Admin access required' });
+  }
+  next();
+}
+
+// Логирование действий админа
+async function logAdminAction(adminId, adminEmail, actionType, payload, req) {
+  try {
+    const ip = req.ip || req.connection.remoteAddress;
+    const userAgent = req.headers['user-agent'];
+    await pool.query(
+      `INSERT INTO admin_audit_log (admin_id, admin_email, action_type, payload, ip_address, user_agent)
+       VALUES ($1, $2, $3, $4, $5, $6)`,
+      [adminId, adminEmail, actionType, JSON.stringify(payload), ip, userAgent]
+    );
+  } catch (err) {
+    console.error('Failed to log admin action:', err.message);
+  }
+}
+
 // Загрузка синонимов из БД
 async function loadSynonyms() {
   try {
@@ -114,9 +162,8 @@ async function loadPromptConfig() {
   }
 }
 
-// LLM парсер (gpt-4o-mini)
+// LLM парсер
 async function llmParse(query) {
-  // Формируем few-shot промпт
   const fewShotMessages = FEW_SHOT_EXAMPLES.flatMap(ex => [
     { role: 'user', content: ex.input },
     { role: 'assistant', content: JSON.stringify(ex.output) }
@@ -139,14 +186,13 @@ async function llmParse(query) {
   const content = response.choices[0].message.content;
   const filters = JSON.parse(content);
 
-  // Расчёт стоимости (deepseek-chat: $0.14/1M input, $0.28/1M output)
   const inputTokens = response.usage?.prompt_tokens || 0;
   const outputTokens = response.usage?.completion_tokens || 0;
   const costUsd = (inputTokens * 0.00000014) + (outputTokens * 0.00000028);
 
   return {
     filters: Object.keys(filters).length > 0 ? filters : null,
-    costUsd: Math.round(costUsd * 100000000) / 100000000 // 8 decimal places
+    costUsd: Math.round(costUsd * 100000000) / 100000000
   };
 }
 
@@ -155,7 +201,6 @@ function keywordParse(query) {
   const q = query.toLowerCase();
   const filters = {};
 
-  // Марка
   for (const [slang, brand] of Object.entries(SYNONYMS)) {
     if (q.includes(slang)) {
       filters.mark_name = brand;
@@ -163,34 +208,26 @@ function keywordParse(query) {
     }
   }
 
-  // Модель (простой паттерн)
   const modelMatch = q.match(/x\d|rav4|camry|a\d|q\d/i);
   if (modelMatch) filters.folder_name = modelMatch[0].toUpperCase();
 
-  // Тип двигателя
   if (q.includes('дизель') || q.includes('diesel')) filters.engine_type = 'diesel';
   if (q.includes('бензин') || q.includes('petrol')) filters.engine_type = 'gasoline';
 
-  // Объём двигателя
   const volumeMatch = q.match(/(\d+\.?\d*)\s*(л|l|литр)/);
   if (volumeMatch) filters.engine_volume_min = parseFloat(volumeMatch[1]);
 
-  // Цена
   const priceMatch = q.match(/до\s*(\d+)\s*(млн|миллион)/i);
   if (priceMatch) filters.price_max = parseInt(priceMatch[1]) * 1000000;
 
-  // Год
   const yearMatch = q.match(/(20\d{2})/);
   if (yearMatch) filters.year_from = parseInt(yearMatch[1]);
 
-  // Кузов
   if (q.includes('внедорожник') || q.includes('джип')) filters.body_type = 'Внедорожник 5 дв.';
   if (q.includes('седан')) filters.body_type = 'Седан';
 
-  // Привод
   if (q.includes('полный привод') || q.includes('4wd')) filters.drive_type = '4WD';
 
-  // КПП
   if (q.includes('автомат') || q.includes('акпп')) filters.transmission = 'AT';
   if (q.includes('механика') || q.includes('мкпп')) filters.transmission = 'MT';
 
@@ -318,7 +355,11 @@ async function logParseSession(query, filters, method, latencyMs, costUsd, resul
   }
 }
 
-// POST /api/v1/parse - основной endpoint
+// ===========================================
+// PUBLIC API
+// ===========================================
+
+// POST /api/v1/parse - основной endpoint (публичный)
 app.post('/api/v1/parse', async (req, res) => {
   const { query } = req.body;
 
@@ -331,7 +372,6 @@ app.post('/api/v1/parse', async (req, res) => {
   let parsingMethod = 'keyword';
   let costUsd = 0;
 
-  // Пробуем LLM если доступен
   if (LLM_ENABLED) {
     try {
       const llmResult = await llmParse(query);
@@ -341,12 +381,10 @@ app.post('/api/v1/parse', async (req, res) => {
       console.log(`LLM parsed: ${JSON.stringify(filters)}, cost: $${costUsd}`);
     } catch (err) {
       console.error('LLM parse error, falling back to keyword:', err.message);
-      // Fallback на keyword parser
       filters = keywordParse(query);
       parsingMethod = 'keyword';
     }
   } else {
-    // LLM недоступен - используем keyword parser
     filters = keywordParse(query);
     parsingMethod = 'keyword';
   }
@@ -361,8 +399,6 @@ app.post('/api/v1/parse', async (req, res) => {
   }
 
   const latencyMs = Date.now() - startTime;
-
-  // Логируем в БД асинхронно
   logParseSession(query, filters, parsingMethod, latencyMs, costUsd, results.length);
 
   res.json({
@@ -378,7 +414,7 @@ app.post('/api/v1/parse', async (req, res) => {
   });
 });
 
-// GET /api/v1/cars/:id - детали машины
+// GET /api/v1/cars/:id - детали машины (публичный)
 app.get('/api/v1/cars/:id', async (req, res) => {
   const id = parseInt(req.params.id);
 
@@ -401,10 +437,101 @@ app.get('/api/v1/cars/:id', async (req, res) => {
   }
 });
 
-// GET /api/v1/admin/analytics - дашборд
-app.get('/api/v1/admin/analytics', async (req, res) => {
+// GET /health (публичный)
+app.get('/health', async (req, res) => {
   try {
-    // Статистика за сегодня
+    const result = await pool.query('SELECT COUNT(*) as total FROM cars_catalog');
+    res.json({
+      status: 'healthy',
+      database: 'connected',
+      llm_enabled: LLM_ENABLED,
+      catalog_status: 'loaded',
+      catalog_size: parseInt(result.rows[0].total)
+    });
+  } catch (err) {
+    res.status(503).json({
+      status: 'unhealthy',
+      database: 'disconnected',
+      llm_enabled: LLM_ENABLED,
+      error: err.message
+    });
+  }
+});
+
+// ===========================================
+// AUTH API
+// ===========================================
+
+// POST /api/v1/admin/auth/login
+app.post('/api/v1/admin/auth/login', async (req, res) => {
+  const { email, password } = req.body;
+
+  if (!email || !password) {
+    return res.status(400).json({ error: 'INVALID_REQUEST', details: 'Email and password required' });
+  }
+
+  try {
+    const result = await pool.query(
+      'SELECT id, email, password_hash, role FROM admin_users WHERE email = $1',
+      [email]
+    );
+
+    if (result.rows.length === 0) {
+      return res.status(401).json({ error: 'INVALID_CREDENTIALS', details: 'Invalid email or password' });
+    }
+
+    const user = result.rows[0];
+    const validPassword = await bcrypt.compare(password, user.password_hash);
+
+    if (!validPassword) {
+      return res.status(401).json({ error: 'INVALID_CREDENTIALS', details: 'Invalid email or password' });
+    }
+
+    // Обновляем last_login
+    await pool.query('UPDATE admin_users SET last_login = NOW() WHERE id = $1', [user.id]);
+
+    // Генерируем JWT
+    const token = jwt.sign(
+      { id: user.id, email: user.email, role: user.role },
+      JWT_SECRET,
+      { expiresIn: JWT_EXPIRES_IN }
+    );
+
+    // Логируем
+    await logAdminAction(user.id, user.email, 'login', { success: true }, req);
+
+    res.json({
+      success: true,
+      token,
+      user: {
+        id: user.id,
+        email: user.email,
+        role: user.role
+      },
+      expires_in: JWT_EXPIRES_IN
+    });
+  } catch (err) {
+    console.error('Login error:', err.message);
+    res.status(500).json({ error: 'SERVER_ERROR', details: err.message });
+  }
+});
+
+// GET /api/v1/admin/auth/me - проверка токена
+app.get('/api/v1/admin/auth/me', authenticateToken, (req, res) => {
+  res.json({
+    id: req.user.id,
+    email: req.user.email,
+    role: req.user.role
+  });
+});
+
+// ===========================================
+// ADMIN API (JWT Protected)
+// ===========================================
+
+// GET /api/v1/admin/analytics - дашборд
+app.get('/api/v1/admin/analytics', authenticateToken, async (req, res) => {
+  try {
     const todayStats = await pool.query(`
       SELECT
         COUNT(*) as requests,
@@ -414,30 +541,22 @@ app.get('/api/v1/admin/analytics', async (req, res) => {
       WHERE created_at >= CURRENT_DATE
     `);
 
-    // Разбивка по методам парсинга
     const methodStats = await pool.query(`
-      SELECT
-        parsing_method,
-        COUNT(*) as count
+      SELECT parsing_method, COUNT(*) as count
       FROM parse_sessions
       WHERE created_at >= CURRENT_DATE
       GROUP BY parsing_method
     `);
 
-    // Top 5 марок за сегодня
     const topBrands = await pool.query(`
-      SELECT
-        filters->>'mark_name' as name,
-        COUNT(*) as count
+      SELECT filters->>'mark_name' as name, COUNT(*) as count
       FROM parse_sessions
-      WHERE created_at >= CURRENT_DATE
-        AND filters->>'mark_name' IS NOT NULL
+      WHERE created_at >= CURRENT_DATE AND filters->>'mark_name' IS NOT NULL
       GROUP BY filters->>'mark_name'
       ORDER BY count DESC
       LIMIT 5
     `);
 
-    // Размер каталога
     const catalogSize = await pool.query('SELECT COUNT(*) as total FROM cars_catalog');
 
     const stats = todayStats.rows[0];
@@ -476,8 +595,8 @@ app.get('/api/v1/admin/analytics', async (req, res) => {
   }
 });
 
-// GET /api/v1/admin/prompts - получить текущий промпт
-app.get('/api/v1/admin/prompts', async (req, res) => {
+// GET /api/v1/admin/prompts
+app.get('/api/v1/admin/prompts', authenticateToken, async (req, res) => {
   res.json({
     ...promptConfig,
     synonyms: SYNONYMS,
@@ -485,33 +604,31 @@ app.get('/api/v1/admin/prompts', async (req, res) => {
   });
 });
 
-// POST /api/v1/admin/prompts - обновить промпт (hot reload)
-app.post('/api/v1/admin/prompts', async (req, res) => {
+// POST /api/v1/admin/prompts - обновить промпт (только admin)
+app.post('/api/v1/admin/prompts', authenticateToken, requireAdmin, async (req, res) => {
   const { system_prompt, temperature, max_tokens, synonyms } = req.body;
 
   try {
     const previousVersion = promptConfig.version;
     const newVersion = previousVersion + 1;
 
-    // Сохраняем новую версию в БД
     await pool.query(
-      `INSERT INTO prompt_versions (version, system_prompt, temperature, max_tokens, status)
-       VALUES ($1, $2, $3, $4, 'active')`,
+      `INSERT INTO prompt_versions (version, system_prompt, temperature, max_tokens, status, created_by)
+       VALUES ($1, $2, $3, $4, 'active', $5)`,
       [
         newVersion,
         system_prompt || promptConfig.system_prompt,
         temperature !== undefined ? temperature : promptConfig.temperature,
-        max_tokens !== undefined ? max_tokens : promptConfig.max_tokens
+        max_tokens !== undefined ? max_tokens : promptConfig.max_tokens,
+        req.user.id
       ]
     );
 
-    // Архивируем старую версию
     await pool.query(
       `UPDATE prompt_versions SET status = 'archived' WHERE version = $1`,
       [previousVersion]
     );
 
-    // Обновляем синонимы если переданы
     if (synonyms) {
       for (const [slang, normalized] of Object.entries(synonyms)) {
         await pool.query(
@@ -523,9 +640,15 @@ app.post('/api/v1/admin/prompts', async (req, res) => {
       }
     }
 
-    // Перезагружаем кэш
     await loadPromptConfig();
     await loadSynonyms();
+
+    // Логируем действие
+    await logAdminAction(req.user.id, req.user.email, 'edit_prompt', {
+      previous_version: previousVersion,
+      new_version: newVersion,
+      changes: { system_prompt: !!system_prompt, temperature, max_tokens, synonyms_count: synonyms ? Object.keys(synonyms).length : 0 }
+    }, req);
 
     res.json({
       status: 'reloaded',
@@ -539,28 +662,27 @@ app.post('/api/v1/admin/prompts', async (req, res) => {
   }
 });
 
-// GET /health
-app.get('/health', async (req, res) => {
+// GET /api/v1/admin/audit - аудит лог (только admin)
+app.get('/api/v1/admin/audit', authenticateToken, requireAdmin, async (req, res) => {
   try {
-    const result = await pool.query('SELECT COUNT(*) as total FROM cars_catalog');
-    res.json({
-      status: 'healthy',
-      database: 'connected',
-      llm_enabled: LLM_ENABLED,
-      catalog_status: 'loaded',
-      catalog_size: parseInt(result.rows[0].total)
-    });
+    const limit = Math.min(parseInt(req.query.limit) || 50, 100);
+    const result = await pool.query(
+      `SELECT id, admin_email, action_type, payload, ip_address, created_at
+       FROM admin_audit_log
+       ORDER BY created_at DESC
+       LIMIT $1`,
+      [limit]
+    );
+    res.json(result.rows);
   } catch (err) {
-    res.status(503).json({
-      status: 'unhealthy',
-      database: 'disconnected',
-      llm_enabled: LLM_ENABLED,
-      error: err.message
-    });
+    console.error('Audit log error:', err.message);
+    res.status(500).json({ error: 'DB_ERROR', details: err.message });
   }
 });
 
-// Инициализация при старте
+// ===========================================
+// INIT
+// ===========================================
 async function init() {
   try {
     await pool.query('SELECT 1');
@@ -577,14 +699,15 @@ async function init() {
   } else {
     console.log('OpenRouter LLM disabled (no API key), using keyword parser');
   }
+
+  console.log('JWT authentication enabled');
 }
 
 const PORT = process.env.PORT || 3000;
 app.listen(PORT, '0.0.0.0', async () => {
   console.log(`Backend: http://localhost:${PORT}`);
   console.log(`Parse:   POST http://localhost:${PORT}/api/v1/parse`);
-  console.log(`Car:     GET  http://localhost:${PORT}/api/v1/cars/:id`);
-  console.log(`Admin:   GET  http://localhost:${PORT}/api/v1/admin/analytics`);
-  console.log(`Prompts: POST http://localhost:${PORT}/api/v1/admin/prompts`);
+  console.log(`Login:   POST http://localhost:${PORT}/api/v1/admin/auth/login`);
+  console.log(`Admin:   GET  http://localhost:${PORT}/api/v1/admin/analytics (JWT)`);
   await init();
 });
