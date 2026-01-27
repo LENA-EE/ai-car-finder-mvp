@@ -1,27 +1,25 @@
 // TODO: остальное из architecture.txt
 // - TypeScript миграция
-// - PostgreSQL + Prisma
 // - JWT аутентификация
 // - gpt-4o-mini интеграция
 // - Rate limiting
-// - Логирование в БД
 
 const express = require('express');
 const cors = require('cors');
+const { Pool } = require('pg');
 
 const app = express();
 app.use(cors());
 app.use(express.json());
 
-// Мок-словарь сленга → марки (из architecture.txt)
-let SYNONYMS = {
-  'бумер': 'BMW', 'bmw': 'BMW', 'бмв': 'BMW',
-  'тойота': 'Toyota', 'toyota': 'Toyota',
-  'мерс': 'Mercedes-Benz', 'мерседес': 'Mercedes-Benz',
-  'ауди': 'Audi', 'audi': 'Audi'
-};
+// PostgreSQL connection
+const pool = new Pool({
+  connectionString: process.env.DATABASE_URL,
+  ssl: process.env.NODE_ENV === 'production' ? { rejectUnauthorized: false } : false
+});
 
-// Конфигурация LLM промпта (TODO: PostgreSQL)
+// Кэш синонимов и конфига (обновляется при старте и hot reload)
+let SYNONYMS = {};
 let promptConfig = {
   version: 1,
   system_prompt: 'Ты парсер запросов для каталога Auto.ru. Преобразуй текст в JSON фильтры.',
@@ -29,6 +27,44 @@ let promptConfig = {
   max_tokens: 200,
   updated_at: new Date().toISOString()
 };
+
+// Загрузка синонимов из БД
+async function loadSynonyms() {
+  try {
+    const result = await pool.query(
+      "SELECT slang, normalized FROM synonyms WHERE category = 'brands'"
+    );
+    SYNONYMS = {};
+    for (const row of result.rows) {
+      SYNONYMS[row.slang.toLowerCase()] = row.normalized;
+    }
+    console.log(`Loaded ${result.rows.length} synonyms from DB`);
+  } catch (err) {
+    console.error('Failed to load synonyms:', err.message);
+  }
+}
+
+// Загрузка конфигурации промптов из БД
+async function loadPromptConfig() {
+  try {
+    const result = await pool.query(
+      "SELECT version, system_prompt, temperature, max_tokens, created_at FROM prompt_versions WHERE status = 'active' ORDER BY version DESC LIMIT 1"
+    );
+    if (result.rows.length > 0) {
+      const row = result.rows[0];
+      promptConfig = {
+        version: row.version,
+        system_prompt: row.system_prompt,
+        temperature: row.temperature,
+        max_tokens: row.max_tokens,
+        updated_at: row.created_at
+      };
+      console.log(`Loaded prompt config v${promptConfig.version} from DB`);
+    }
+  } catch (err) {
+    console.error('Failed to load prompt config:', err.message);
+  }
+}
 
 // Мок-парсер (TODO: заменить на gpt-4o-mini)
 function mockParse(query) {
@@ -58,58 +94,69 @@ function mockParse(query) {
   return Object.keys(filters).length >= 1 ? filters : null;
 }
 
-// Мок-каталог с полными данными (TODO: PostgreSQL)
-// Структура из architecture.txt: mark_name, folder_name, body_type, engine_volume, hp, price
-const MOCK_CARS = [
-  {
-    id: 1,
-    mark_name: 'BMW',
-    folder_name: 'X5',
-    name: 'BMW X5 xDrive30d',
-    body_type: 'Внедорожник 5 дв.',
-    engine_volume: 3.0,
-    hp: 249,
-    transmission: 'AT',
-    drive_type: '4WD',
-    engine_type: 'diesel',
-    year: 2019,
-    price: 4200000,
-    engine: '3.0 Diesel, 249 hp'
-  },
-  {
-    id: 2,
-    mark_name: 'BMW',
-    folder_name: 'X5',
-    name: 'BMW X5 xDrive40i',
-    body_type: 'Внедорожник 5 дв.',
-    engine_volume: 3.0,
-    hp: 340,
-    transmission: 'AT',
-    drive_type: '4WD',
-    engine_type: 'gasoline',
-    year: 2020,
-    price: 4800000,
-    engine: '3.0 Petrol, 340 hp'
-  },
-  {
-    id: 3,
-    mark_name: 'Toyota',
-    folder_name: 'RAV4',
-    name: 'Toyota RAV4',
-    body_type: 'Внедорожник 5 дв.',
-    engine_volume: 2.0,
-    hp: 150,
-    transmission: 'CVT',
-    drive_type: 'FWD',
-    engine_type: 'gasoline',
-    year: 2021,
-    price: 2500000,
-    engine: '2.0 Petrol, 150 hp'
-  }
-];
+// Поиск машин в PostgreSQL
+async function searchCars(filters) {
+  const conditions = [];
+  const params = [];
+  let paramIndex = 1;
 
-// POST /api/v1/parse - основной endpoint из architecture.txt
-app.post('/api/v1/parse', (req, res) => {
+  if (filters.mark_name) {
+    conditions.push(`LOWER(mark_name) = LOWER($${paramIndex})`);
+    params.push(filters.mark_name);
+    paramIndex++;
+  }
+
+  if (filters.folder_name) {
+    conditions.push(`LOWER(folder_name) LIKE LOWER($${paramIndex})`);
+    params.push(`%${filters.folder_name}%`);
+    paramIndex++;
+  }
+
+  if (filters.engine_type) {
+    conditions.push(`engine_type = $${paramIndex}`);
+    params.push(filters.engine_type);
+    paramIndex++;
+  }
+
+  if (filters.engine_volume_min) {
+    conditions.push(`engine_volume >= $${paramIndex}`);
+    params.push(filters.engine_volume_min);
+    paramIndex++;
+  }
+
+  const whereClause = conditions.length > 0 ? `WHERE ${conditions.join(' AND ')}` : '';
+  const query = `
+    SELECT id, mark_name, folder_name, body_type, engine_volume, hp,
+           transmission, drive_type, engine_type, year, price
+    FROM cars_catalog
+    ${whereClause}
+    ORDER BY year DESC, price ASC
+    LIMIT 5
+  `;
+
+  const result = await pool.query(query, params);
+  return result.rows.map(car => ({
+    ...car,
+    name: `${car.mark_name} ${car.folder_name}`,
+    engine: `${car.engine_volume} ${car.engine_type === 'diesel' ? 'Diesel' : 'Petrol'}, ${car.hp} hp`
+  }));
+}
+
+// Логирование запроса в БД
+async function logParseSession(query, filters, method, latencyMs, costUsd, resultsCount) {
+  try {
+    await pool.query(
+      `INSERT INTO parse_sessions (user_query, filters, parsing_method, latency_ms, cost_usd, catalog_status, results_count)
+       VALUES ($1, $2, $3, $4, $5, 'loaded', $6)`,
+      [query, JSON.stringify(filters), method, latencyMs, costUsd, resultsCount]
+    );
+  } catch (err) {
+    console.error('Failed to log parse session:', err.message);
+  }
+}
+
+// POST /api/v1/parse - основной endpoint
+app.post('/api/v1/parse', async (req, res) => {
   const { query } = req.body;
 
   if (!query || query.length < 2) {
@@ -118,27 +165,21 @@ app.post('/api/v1/parse', (req, res) => {
 
   const startTime = Date.now();
   const filters = mockParse(query);
+  let results = [];
 
-  // Поиск в мок-каталоге по всем фильтрам
-  let results = null;
   if (filters) {
-    results = MOCK_CARS.filter(car => {
-      if (filters.mark_name && !car.mark_name.toLowerCase().includes(filters.mark_name.toLowerCase())) return false;
-      if (filters.folder_name && !car.folder_name.toLowerCase().includes(filters.folder_name.toLowerCase())) return false;
-      if (filters.engine_type && car.engine_type !== filters.engine_type) return false;
-      if (filters.engine_volume_min && car.engine_volume < filters.engine_volume_min) return false;
-      return true;
-    }).slice(0, 5);
-  }
-
-  // Сбор статистики для /admin/analytics
-  stats.today_requests++;
-  if (filters) {
-    stats.successful_parses++;
-    if (filters.mark_name) {
-      stats.brand_counts[filters.mark_name] = (stats.brand_counts[filters.mark_name] || 0) + 1;
+    try {
+      results = await searchCars(filters);
+    } catch (err) {
+      console.error('Search error:', err.message);
     }
   }
+
+  const latencyMs = Date.now() - startTime;
+  const costUsd = 0.00006;
+
+  // Логируем в БД асинхронно
+  logParseSession(query, filters, 'mock', latencyMs, costUsd, results.length);
 
   res.json({
     success: filters !== null,
@@ -146,113 +187,194 @@ app.post('/api/v1/parse', (req, res) => {
     filters,
     results,
     metrics: {
-      parsing_method: 'mock', // TODO: 'llm'
-      latency_ms: Date.now() - startTime,
-      cost_usd: 0.00006
+      parsing_method: 'mock',
+      latency_ms: latencyMs,
+      cost_usd: costUsd
     }
   });
 });
 
-// GET /api/v1/cars/:id - детали машины (из architecture.txt)
-app.get('/api/v1/cars/:id', (req, res) => {
+// GET /api/v1/cars/:id - детали машины
+app.get('/api/v1/cars/:id', async (req, res) => {
   const id = parseInt(req.params.id);
-  const car = MOCK_CARS.find(c => c.id === id);
 
-  if (!car) {
-    return res.status(404).json({ error: 'NOT_FOUND', details: `Car ${id} not found` });
+  try {
+    const result = await pool.query(
+      `SELECT id, mark_name, folder_name, body_type, engine_volume, hp,
+              transmission, drive_type, engine_type, year, price
+       FROM cars_catalog WHERE id = $1`,
+      [id]
+    );
+
+    if (result.rows.length === 0) {
+      return res.status(404).json({ error: 'NOT_FOUND', details: `Car ${id} not found` });
+    }
+
+    res.json(result.rows[0]);
+  } catch (err) {
+    console.error('Get car error:', err.message);
+    res.status(500).json({ error: 'DB_ERROR', details: err.message });
   }
-
-  // Формат ответа из architecture.txt
-  res.json({
-    id: car.id,
-    mark_name: car.mark_name,
-    folder_name: car.folder_name,
-    body_type: car.body_type,
-    engine_volume: car.engine_volume,
-    hp: car.hp,
-    transmission: car.transmission,
-    drive_type: car.drive_type,
-    engine_type: car.engine_type,
-    year: car.year,
-    price: car.price
-  });
 });
 
-// Мок-статистика запросов (TODO: PostgreSQL + реальные логи)
-const stats = {
-  today_requests: 0,
-  successful_parses: 0,
-  brand_counts: {}
-};
+// GET /api/v1/admin/analytics - дашборд
+app.get('/api/v1/admin/analytics', async (req, res) => {
+  try {
+    // Статистика за сегодня
+    const todayStats = await pool.query(`
+      SELECT
+        COUNT(*) as requests,
+        COUNT(*) FILTER (WHERE filters IS NOT NULL) as successful_parses,
+        COALESCE(SUM(cost_usd), 0) as total_cost
+      FROM parse_sessions
+      WHERE created_at >= CURRENT_DATE
+    `);
 
-// GET /api/v1/admin/analytics - дашборд из architecture.txt
-app.get('/api/v1/admin/analytics', (req, res) => {
-  // TODO: JWT аутентификация
-  const accuracy = stats.today_requests > 0
-    ? (stats.successful_parses / stats.today_requests)
-    : 0;
+    // Top 5 марок за сегодня
+    const topBrands = await pool.query(`
+      SELECT
+        filters->>'mark_name' as name,
+        COUNT(*) as count
+      FROM parse_sessions
+      WHERE created_at >= CURRENT_DATE
+        AND filters->>'mark_name' IS NOT NULL
+      GROUP BY filters->>'mark_name'
+      ORDER BY count DESC
+      LIMIT 5
+    `);
 
-  const top_brands = Object.entries(stats.brand_counts)
-    .sort((a, b) => b[1] - a[1])
-    .slice(0, 5)
-    .map(([name, count]) => ({ name, count, share: stats.today_requests > 0 ? count / stats.today_requests : 0 }));
+    // Размер каталога
+    const catalogSize = await pool.query('SELECT COUNT(*) as total FROM cars_catalog');
 
-  res.json({
-    today: {
-      requests: stats.today_requests,
-      parsing_accuracy: Math.round(accuracy * 1000) / 1000,
-      llm_cost_usd: stats.today_requests * 0.00006
-    },
-    top_brands,
-    catalog: {
-      total_records: MOCK_CARS.length,
-      last_updated: new Date().toISOString()
-    }
-  });
+    const stats = todayStats.rows[0];
+    const requests = parseInt(stats.requests) || 0;
+    const successfulParses = parseInt(stats.successful_parses) || 0;
+    const accuracy = requests > 0 ? successfulParses / requests : 0;
+
+    const topBrandsWithShare = topBrands.rows.map(b => ({
+      name: b.name,
+      count: parseInt(b.count),
+      share: requests > 0 ? parseInt(b.count) / requests : 0
+    }));
+
+    res.json({
+      today: {
+        requests,
+        parsing_accuracy: Math.round(accuracy * 1000) / 1000,
+        llm_cost_usd: parseFloat(stats.total_cost) || 0
+      },
+      top_brands: topBrandsWithShare,
+      catalog: {
+        total_records: parseInt(catalogSize.rows[0].total),
+        last_updated: new Date().toISOString()
+      }
+    });
+  } catch (err) {
+    console.error('Analytics error:', err.message);
+    res.status(500).json({ error: 'DB_ERROR', details: err.message });
+  }
 });
 
 // GET /api/v1/admin/prompts - получить текущий промпт
-app.get('/api/v1/admin/prompts', (req, res) => {
-  // TODO: JWT аутентификация
+app.get('/api/v1/admin/prompts', async (req, res) => {
   res.json({
     ...promptConfig,
     synonyms: SYNONYMS
   });
 });
 
-// POST /api/v1/admin/prompts - обновить промпт (hot reload) из architecture.txt
-app.post('/api/v1/admin/prompts', (req, res) => {
-  // TODO: JWT аутентификация
+// POST /api/v1/admin/prompts - обновить промпт (hot reload)
+app.post('/api/v1/admin/prompts', async (req, res) => {
   const { system_prompt, temperature, max_tokens, synonyms } = req.body;
 
-  const previousVersion = promptConfig.version;
+  try {
+    const previousVersion = promptConfig.version;
+    const newVersion = previousVersion + 1;
 
-  if (system_prompt) promptConfig.system_prompt = system_prompt;
-  if (temperature !== undefined) promptConfig.temperature = temperature;
-  if (max_tokens !== undefined) promptConfig.max_tokens = max_tokens;
-  if (synonyms) SYNONYMS = { ...SYNONYMS, ...synonyms };
+    // Сохраняем новую версию в БД
+    await pool.query(
+      `INSERT INTO prompt_versions (version, system_prompt, temperature, max_tokens, status)
+       VALUES ($1, $2, $3, $4, 'active')`,
+      [
+        newVersion,
+        system_prompt || promptConfig.system_prompt,
+        temperature !== undefined ? temperature : promptConfig.temperature,
+        max_tokens !== undefined ? max_tokens : promptConfig.max_tokens
+      ]
+    );
 
-  promptConfig.version++;
-  promptConfig.updated_at = new Date().toISOString();
+    // Архивируем старую версию
+    await pool.query(
+      `UPDATE prompt_versions SET status = 'archived' WHERE version = $1`,
+      [previousVersion]
+    );
 
-  res.json({
-    status: 'reloaded',
-    previous_version: previousVersion,
-    current_version: promptConfig.version,
-    updated_at: promptConfig.updated_at
-  });
+    // Обновляем синонимы если переданы
+    if (synonyms) {
+      for (const [slang, normalized] of Object.entries(synonyms)) {
+        await pool.query(
+          `INSERT INTO synonyms (category, slang, normalized)
+           VALUES ('brands', $1, $2)
+           ON CONFLICT (category, slang) DO UPDATE SET normalized = $2`,
+          [slang.toLowerCase(), normalized]
+        );
+      }
+    }
+
+    // Перезагружаем кэш
+    await loadPromptConfig();
+    await loadSynonyms();
+
+    res.json({
+      status: 'reloaded',
+      previous_version: previousVersion,
+      current_version: promptConfig.version,
+      updated_at: promptConfig.updated_at
+    });
+  } catch (err) {
+    console.error('Update prompts error:', err.message);
+    res.status(500).json({ error: 'DB_ERROR', details: err.message });
+  }
 });
 
 // GET /health
-app.get('/health', (req, res) => {
-  res.json({ status: 'healthy', catalog_status: 'loaded', catalog_size: MOCK_CARS.length });
+app.get('/health', async (req, res) => {
+  try {
+    const result = await pool.query('SELECT COUNT(*) as total FROM cars_catalog');
+    res.json({
+      status: 'healthy',
+      database: 'connected',
+      catalog_status: 'loaded',
+      catalog_size: parseInt(result.rows[0].total)
+    });
+  } catch (err) {
+    res.status(503).json({
+      status: 'unhealthy',
+      database: 'disconnected',
+      error: err.message
+    });
+  }
 });
 
+// Инициализация при старте
+async function init() {
+  try {
+    await pool.query('SELECT 1');
+    console.log('PostgreSQL connected');
+    await loadSynonyms();
+    await loadPromptConfig();
+  } catch (err) {
+    console.error('Database connection failed:', err.message);
+    console.log('Running without database (mock mode)');
+  }
+}
+
 const PORT = process.env.PORT || 3000;
-app.listen(PORT, '0.0.0.0', () => {
+app.listen(PORT, '0.0.0.0', async () => {
   console.log(`Backend: http://localhost:${PORT}`);
   console.log(`Parse:   POST http://localhost:${PORT}/api/v1/parse`);
   console.log(`Car:     GET  http://localhost:${PORT}/api/v1/cars/:id`);
   console.log(`Admin:   GET  http://localhost:${PORT}/api/v1/admin/analytics`);
   console.log(`Prompts: POST http://localhost:${PORT}/api/v1/admin/prompts`);
+  await init();
 });
