@@ -8,10 +8,18 @@ const { Pool } = require('pg');
 const OpenAI = require('openai');
 const jwt = require('jsonwebtoken');
 const bcrypt = require('bcryptjs');
+const multer = require('multer');
+const { parse: csvParse } = require('csv-parse/sync');
 
 const app = express();
 app.use(cors());
 app.use(express.json());
+
+// File upload config (max 50MB)
+const upload = multer({
+  storage: multer.memoryStorage(),
+  limits: { fileSize: 50 * 1024 * 1024 }
+});
 
 // PostgreSQL connection
 const pool = new Pool({
@@ -676,6 +684,174 @@ app.get('/api/v1/admin/audit', authenticateToken, requireAdmin, async (req, res)
     res.json(result.rows);
   } catch (err) {
     console.error('Audit log error:', err.message);
+    res.status(500).json({ error: 'DB_ERROR', details: err.message });
+  }
+});
+
+// POST /api/v1/admin/catalog/upload - загрузка каталога CSV (только admin)
+app.post('/api/v1/admin/catalog/upload', authenticateToken, requireAdmin, upload.single('file'), async (req, res) => {
+  if (!req.file) {
+    return res.status(400).json({ error: 'NO_FILE', details: 'CSV file required' });
+  }
+
+  const startTime = Date.now();
+
+  try {
+    const content = req.file.buffer.toString('utf-8');
+    let records;
+
+    // Parse CSV
+    try {
+      records = csvParse(content, {
+        columns: true,
+        skip_empty_lines: true,
+        trim: true,
+        bom: true
+      });
+    } catch (parseErr) {
+      return res.status(400).json({ error: 'PARSE_ERROR', details: `CSV parse error: ${parseErr.message}` });
+    }
+
+    if (records.length === 0) {
+      return res.status(400).json({ error: 'EMPTY_FILE', details: 'CSV file is empty' });
+    }
+
+    // Validate and insert records
+    const errors = [];
+    const warnings = [];
+    let recordsAdded = 0;
+    let duplicates = 0;
+    const marks = new Set();
+    const models = new Set();
+
+    // Required fields
+    const requiredFields = ['mark_name'];
+
+    for (let i = 0; i < records.length; i++) {
+      const row = records[i];
+      const rowNum = i + 2; // +2 for header and 0-index
+
+      // Check required fields
+      const missingFields = requiredFields.filter(f => !row[f] || row[f].trim() === '');
+      if (missingFields.length > 0) {
+        errors.push({ row: rowNum, error: `Missing required fields: ${missingFields.join(', ')}` });
+        continue;
+      }
+
+      // Prepare values with validation
+      const car = {
+        mark_name: row.mark_name?.trim(),
+        mark_code: row.mark_code?.trim() || null,
+        folder_name: row.folder_name?.trim() || null,
+        folder_id: row.folder_id?.trim() || null,
+        model_name: row.model_name?.trim() || null,
+        modification_name: row.modification_name?.trim() || null,
+        modification_id: row.modification_id?.trim() || null,
+        tech_param_id: row.tech_param_id?.trim() || null,
+        configuration_id: row.configuration_id?.trim() || null,
+        body_type: row.body_type?.trim() || null,
+        engine_volume: parseFloat(row.engine_volume) || null,
+        hp: parseInt(row.hp) || null,
+        transmission: row.transmission?.trim() || null,
+        drive_type: row.drive_type?.trim() || null,
+        engine_type: row.engine_type?.trim() || null,
+        year: parseInt(row.year) || null,
+        year_from: parseInt(row.year_from) || null,
+        year_to: parseInt(row.year_to) || null,
+        price: parseInt(row.price) || null
+      };
+
+      // Validate numeric fields
+      if (row.engine_volume && isNaN(parseFloat(row.engine_volume))) {
+        errors.push({ row: rowNum, error: `Invalid engine_volume: '${row.engine_volume}'` });
+        continue;
+      }
+      if (row.hp && isNaN(parseInt(row.hp))) {
+        errors.push({ row: rowNum, error: `Invalid hp: '${row.hp}'` });
+        continue;
+      }
+      if (row.year && isNaN(parseInt(row.year))) {
+        errors.push({ row: rowNum, error: `Invalid year: '${row.year}'` });
+        continue;
+      }
+      if (row.price && isNaN(parseInt(row.price))) {
+        errors.push({ row: rowNum, error: `Invalid price: '${row.price}'` });
+        continue;
+      }
+
+      // Insert into database
+      try {
+        await pool.query(
+          `INSERT INTO cars_catalog (mark_name, mark_code, folder_name, folder_id, model_name,
+            modification_name, modification_id, tech_param_id, configuration_id, body_type,
+            engine_volume, hp, transmission, drive_type, engine_type, year, year_from, year_to, price)
+           VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19)`,
+          [car.mark_name, car.mark_code, car.folder_name, car.folder_id, car.model_name,
+           car.modification_name, car.modification_id, car.tech_param_id, car.configuration_id, car.body_type,
+           car.engine_volume, car.hp, car.transmission, car.drive_type, car.engine_type,
+           car.year, car.year_from, car.year_to, car.price]
+        );
+        recordsAdded++;
+        marks.add(car.mark_name);
+        if (car.folder_name) models.add(car.folder_name);
+      } catch (dbErr) {
+        if (dbErr.code === '23505') { // Unique violation
+          duplicates++;
+        } else {
+          errors.push({ row: rowNum, error: `DB error: ${dbErr.message}` });
+        }
+      }
+    }
+
+    if (duplicates > 0) {
+      warnings.push({ type: 'duplicates', count: duplicates });
+    }
+
+    const duration = Date.now() - startTime;
+
+    // Audit log
+    await logAdminAction(req.user.id, req.user.email, 'upload_catalog', {
+      filename: req.file.originalname,
+      file_size: req.file.size,
+      records_total: records.length,
+      records_added: recordsAdded,
+      errors_count: errors.length,
+      duplicates,
+      duration_ms: duration
+    }, req);
+
+    res.json({
+      success: true,
+      records_added: recordsAdded,
+      marks_count: marks.size,
+      models_count: models.size,
+      errors: errors.slice(0, 50), // Limit errors in response
+      warnings,
+      duration_ms: duration
+    });
+
+  } catch (err) {
+    console.error('Catalog upload error:', err.message);
+    res.status(500).json({ error: 'SERVER_ERROR', details: err.message });
+  }
+});
+
+// DELETE /api/v1/admin/catalog - очистить каталог (только admin)
+app.delete('/api/v1/admin/catalog', authenticateToken, requireAdmin, async (req, res) => {
+  try {
+    const result = await pool.query('DELETE FROM cars_catalog');
+    const deletedCount = result.rowCount;
+
+    await logAdminAction(req.user.id, req.user.email, 'clear_catalog', {
+      deleted_count: deletedCount
+    }, req);
+
+    res.json({
+      success: true,
+      deleted_count: deletedCount
+    });
+  } catch (err) {
+    console.error('Clear catalog error:', err.message);
     res.status(500).json({ error: 'DB_ERROR', details: err.message });
   }
 });

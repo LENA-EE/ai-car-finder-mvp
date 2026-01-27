@@ -332,6 +332,234 @@ function AdminDashboard() {
   );
 }
 
+// Компонент Catalog Upload - POST /api/v1/admin/catalog/upload
+function CatalogUpload() {
+  const [file, setFile] = useState(null);
+  const [uploading, setUploading] = useState(false);
+  const [result, setResult] = useState(null);
+  const [error, setError] = useState(null);
+  const [dragOver, setDragOver] = useState(false);
+  const [catalogSize, setCatalogSize] = useState(0);
+
+  // Fetch current catalog size
+  const fetchCatalogSize = async () => {
+    try {
+      const res = await authFetch(`${API_URL}/api/v1/admin/analytics`);
+      const data = await res.json();
+      setCatalogSize(data.catalog?.total_records || 0);
+    } catch (err) {
+      console.error("Error fetching catalog size:", err);
+    }
+  };
+
+  useEffect(() => {
+    fetchCatalogSize();
+  }, []);
+
+  const handleFileSelect = (e) => {
+    const selectedFile = e.target.files?.[0];
+    if (selectedFile) {
+      if (!selectedFile.name.endsWith('.csv')) {
+        setError('Только CSV файлы поддерживаются');
+        return;
+      }
+      setFile(selectedFile);
+      setError(null);
+      setResult(null);
+    }
+  };
+
+  const handleDrop = (e) => {
+    e.preventDefault();
+    setDragOver(false);
+    const droppedFile = e.dataTransfer.files?.[0];
+    if (droppedFile) {
+      if (!droppedFile.name.endsWith('.csv')) {
+        setError('Только CSV файлы поддерживаются');
+        return;
+      }
+      setFile(droppedFile);
+      setError(null);
+      setResult(null);
+    }
+  };
+
+  const handleUpload = async () => {
+    if (!file) return;
+
+    setUploading(true);
+    setError(null);
+    setResult(null);
+
+    try {
+      const formData = new FormData();
+      formData.append('file', file);
+
+      const token = getToken();
+      const res = await fetch(`${API_URL}/api/v1/admin/catalog/upload`, {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${token}`
+        },
+        body: formData
+      });
+
+      const data = await res.json();
+
+      if (!res.ok) {
+        setError(data.details || data.error || 'Ошибка загрузки');
+        return;
+      }
+
+      setResult(data);
+      setFile(null);
+      fetchCatalogSize();
+    } catch (err) {
+      setError(`Ошибка: ${err.message}`);
+    } finally {
+      setUploading(false);
+    }
+  };
+
+  const handleClearCatalog = async () => {
+    if (!window.confirm('Вы уверены? Все записи каталога будут удалены!')) {
+      return;
+    }
+
+    try {
+      const res = await authFetch(`${API_URL}/api/v1/admin/catalog`, {
+        method: 'DELETE'
+      });
+      const data = await res.json();
+      if (res.ok) {
+        setResult({ cleared: true, deleted_count: data.deleted_count });
+        fetchCatalogSize();
+      } else {
+        setError(data.details || 'Ошибка очистки');
+      }
+    } catch (err) {
+      setError(`Ошибка: ${err.message}`);
+    }
+  };
+
+  return (
+    <div className="catalog-upload">
+      <div className="catalog-info">
+        <span>Текущий размер каталога:</span>
+        <span className="catalog-count">{catalogSize.toLocaleString('ru-RU')} записей</span>
+      </div>
+
+      <div
+        className={`drop-zone ${dragOver ? 'drag-over' : ''} ${file ? 'has-file' : ''}`}
+        onDragOver={(e) => { e.preventDefault(); setDragOver(true); }}
+        onDragLeave={() => setDragOver(false)}
+        onDrop={handleDrop}
+        onClick={() => document.getElementById('file-input').click()}
+      >
+        <input
+          id="file-input"
+          type="file"
+          accept=".csv"
+          onChange={handleFileSelect}
+          style={{ display: 'none' }}
+        />
+        {file ? (
+          <div className="file-info">
+            <span className="file-name">{file.name}</span>
+            <span className="file-size">({(file.size / 1024).toFixed(1)} KB)</span>
+          </div>
+        ) : (
+          <div className="drop-text">
+            <p>Перетащите CSV файл сюда</p>
+            <p className="drop-hint">или нажмите для выбора</p>
+          </div>
+        )}
+      </div>
+
+      <div className="upload-actions">
+        <button
+          className="upload-btn"
+          onClick={handleUpload}
+          disabled={!file || uploading}
+        >
+          {uploading ? 'Загрузка...' : 'Загрузить каталог'}
+        </button>
+        <button
+          className="clear-btn"
+          onClick={handleClearCatalog}
+          disabled={uploading || catalogSize === 0}
+        >
+          Очистить каталог
+        </button>
+      </div>
+
+      {error && <div className="error">{error}</div>}
+
+      {result && !result.cleared && (
+        <div className="upload-result">
+          <h3>Результат загрузки</h3>
+          <div className="result-stats">
+            <div className="result-item success">
+              <span>Добавлено:</span>
+              <span>{result.records_added}</span>
+            </div>
+            <div className="result-item">
+              <span>Марок:</span>
+              <span>{result.marks_count}</span>
+            </div>
+            <div className="result-item">
+              <span>Моделей:</span>
+              <span>{result.models_count}</span>
+            </div>
+            <div className="result-item">
+              <span>Время:</span>
+              <span>{(result.duration_ms / 1000).toFixed(1)}с</span>
+            </div>
+          </div>
+
+          {result.warnings?.length > 0 && (
+            <div className="result-warnings">
+              {result.warnings.map((w, i) => (
+                <div key={i} className="warning-item">
+                  {w.type === 'duplicates' && `Дубликатов пропущено: ${w.count}`}
+                </div>
+              ))}
+            </div>
+          )}
+
+          {result.errors?.length > 0 && (
+            <div className="result-errors">
+              <p>Ошибки ({result.errors.length}):</p>
+              {result.errors.slice(0, 5).map((e, i) => (
+                <div key={i} className="error-item">
+                  Строка {e.row}: {e.error}
+                </div>
+              ))}
+              {result.errors.length > 5 && (
+                <div className="error-item">...и ещё {result.errors.length - 5}</div>
+              )}
+            </div>
+          )}
+        </div>
+      )}
+
+      {result?.cleared && (
+        <div className="upload-result">
+          <div className="result-item success">
+            Каталог очищен. Удалено записей: {result.deleted_count}
+          </div>
+        </div>
+      )}
+
+      <div className="csv-format">
+        <h4>Формат CSV:</h4>
+        <code>mark_name,folder_name,body_type,engine_volume,hp,transmission,drive_type,engine_type,year,price</code>
+        <p className="format-hint">Обязательное поле: mark_name</p>
+      </div>
+    </div>
+  );
+}
+
 // Компонент Prompt Editor - POST /api/v1/admin/prompts
 function PromptEditor() {
   const [config, setConfig] = useState(null);
@@ -501,7 +729,7 @@ function App() {
   };
 
   // Если админ-страница и нет авторизации - показать логин
-  const needsAuth = page === "admin" || page === "prompts";
+  const needsAuth = page === "admin" || page === "prompts" || page === "catalog";
   const isAuthed = !!user;
 
   return (
@@ -532,6 +760,12 @@ function App() {
           Админ
         </button>
         <button
+          className={page === "catalog" ? "active" : ""}
+          onClick={() => setPage("catalog")}
+        >
+          Каталог
+        </button>
+        <button
           className={page === "prompts" ? "active" : ""}
           onClick={() => setPage("prompts")}
         >
@@ -542,6 +776,7 @@ function App() {
       {page === "user" && <UserSearch />}
       {needsAuth && !isAuthed && <LoginForm onLogin={handleLogin} />}
       {page === "admin" && isAuthed && <AdminDashboard />}
+      {page === "catalog" && isAuthed && <CatalogUpload />}
       {page === "prompts" && isAuthed && <PromptEditor />}
     </div>
   );
