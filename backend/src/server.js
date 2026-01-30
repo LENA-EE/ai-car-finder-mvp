@@ -139,7 +139,7 @@ let promptConfig = {
 - робот → AMT
 
 Привод:
-- полный, 4х4 → 4WD
+- полный, 4х4, 4вд, 4wd, awd → 4WD
 - передний → FWD
 - задний → RWD
 
@@ -418,7 +418,7 @@ function keywordParse(query) {
   }
 
   // Привод
-  if (q.includes('полный') || q.includes('4wd') || q.includes('4х4') || q.includes('4x4') || q.includes('awd')) {
+  if (q.includes('полный') || q.includes('4wd') || q.includes('4х4') || q.includes('4x4') || q.includes('4вд') || q.includes('awd')) {
     filters.drive_type = '4WD';
   } else if (q.includes('передний') || q.includes('fwd')) {
     filters.drive_type = 'FWD';
@@ -459,7 +459,7 @@ async function searchCars(filters) {
   }
 
   if (filters.engine_type) {
-    conditions.push(`engine_type = $${paramIndex}`);
+    conditions.push(`LOWER(engine_type) = LOWER($${paramIndex})`);
     params.push(filters.engine_type);
     paramIndex++;
   }
@@ -483,13 +483,13 @@ async function searchCars(filters) {
   }
 
   if (filters.transmission) {
-    conditions.push(`transmission = $${paramIndex}`);
+    conditions.push(`LOWER(transmission) = LOWER($${paramIndex})`);
     params.push(filters.transmission);
     paramIndex++;
   }
 
   if (filters.drive_type) {
-    conditions.push(`drive_type = $${paramIndex}`);
+    conditions.push(`LOWER(drive_type) = LOWER($${paramIndex})`);
     params.push(filters.drive_type);
     paramIndex++;
   }
