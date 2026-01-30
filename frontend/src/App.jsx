@@ -138,11 +138,13 @@ const clearHistory = () => {
 function UserSearch() {
   const [query, setQuery] = useState("");
   const [loading, setLoading] = useState(false);
+  const [loadingMore, setLoadingMore] = useState(false);
   const [result, setResult] = useState(null);
   const [error, setError] = useState(null);
   const [selectedCar, setSelectedCar] = useState(null);
   const [history, setHistory] = useState(getHistory());
   const [showHistory, setShowHistory] = useState(false);
+  const [lastQuery, setLastQuery] = useState('');
 
   // POST /api/v1/parse
   const handleSearch = async (searchQuery = query) => {
@@ -153,12 +155,13 @@ function UserSearch() {
     setError(null);
     setResult(null);
     setShowHistory(false);
+    setLastQuery(q);
 
     try {
       const res = await fetch(`${API_URL}/api/v1/parse`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ query: q }),
+        body: JSON.stringify({ query: q, limit: 10, offset: 0 }),
       });
 
       const data = await res.json();
@@ -175,6 +178,37 @@ function UserSearch() {
       setError(`Ошибка соединения: ${err.message}`);
     } finally {
       setLoading(false);
+    }
+  };
+
+  // Загрузить ещё результатов
+  const handleLoadMore = async () => {
+    if (!result || !result.hasMore || !lastQuery) return;
+
+    setLoadingMore(true);
+    try {
+      const res = await fetch(`${API_URL}/api/v1/parse`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          query: lastQuery,
+          limit: 10,
+          offset: result.offset + result.results.length
+        }),
+      });
+
+      const data = await res.json();
+      if (res.ok) {
+        setResult(prev => ({
+          ...data,
+          results: [...prev.results, ...data.results],
+          message: prev.message // Сохраняем оригинальное сообщение
+        }));
+      }
+    } catch (err) {
+      console.error('Load more error:', err);
+    } finally {
+      setLoadingMore(false);
     }
   };
 
@@ -264,7 +298,7 @@ function UserSearch() {
 
           {result.results?.length > 0 && (
             <div className="cars">
-              <p>Найдено {result.results.length} машин:</p>
+              <p>Показано {result.results.length} из {result.total} машин:</p>
               {result.results.map((car) => (
                 <div
                   key={car.id}
@@ -279,6 +313,15 @@ function UserSearch() {
                   <div className="car-hint">Нажмите для подробностей</div>
                 </div>
               ))}
+              {result.hasMore && (
+                <button
+                  className="load-more-btn"
+                  onClick={handleLoadMore}
+                  disabled={loadingMore}
+                >
+                  {loadingMore ? 'Загрузка...' : `Показать ещё (${result.total - result.results.length})`}
+                </button>
+              )}
             </div>
           )}
 

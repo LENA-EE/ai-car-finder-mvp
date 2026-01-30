@@ -1102,3 +1102,30 @@ h1 {
   font-weight: bold;
   font-size: 14px;
 }
+
+/* Load More Button */
+.load-more-btn {
+  width: 100%;
+  margin-top: 16px;
+  padding: 12px;
+  background: linear-gradient(135deg, #3b82f6, #22d3ee);
+  border: none;
+  border-radius: 8px;
+  color: white;
+  font-weight: bold;
+  font-size: 14px;
+  cursor: pointer;
+  transition: all 0.3s ease;
+}
+
+.load-more-btn:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 4px 12px rgba(59, 130, 246, 0.4);
+}
+
+.load-more-btn:disabled {
+  background: #475569;
+  cursor: not-allowed;
+  transform: none;
+  box-shadow: none;
+}

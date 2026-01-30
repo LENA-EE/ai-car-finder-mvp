@@ -440,8 +440,8 @@ function keywordParse(query) {
   return Object.keys(filters).length >= 1 ? filters : null;
 }
 
-// Поиск машин в PostgreSQL
-async function searchCars(filters) {
+// Поиск машин в PostgreSQL с пагинацией
+async function searchCars(filters, limit = 10, offset = 0) {
   const conditions = [];
   const params = [];
   let paramIndex = 1;
@@ -531,21 +531,33 @@ async function searchCars(filters) {
   }
 
   const whereClause = conditions.length > 0 ? `WHERE ${conditions.join(' AND ')}` : '';
+
+  // Сначала получаем общее количество
+  const countQuery = `SELECT COUNT(*) as total FROM cars_catalog ${whereClause}`;
+  const countResult = await pool.query(countQuery, params);
+  const total = parseInt(countResult.rows[0]?.total) || 0;
+
+  // Затем получаем данные с пагинацией
   const query = `
     SELECT id, mark_name, folder_name, body_type, engine_volume, hp,
            transmission, drive_type, engine_type, year, price
     FROM cars_catalog
     ${whereClause}
     ORDER BY year DESC, price ASC
-    LIMIT 5
+    LIMIT $${paramIndex} OFFSET $${paramIndex + 1}
   `;
 
+  params.push(limit, offset);
   const result = await pool.query(query, params);
-  return result.rows.map(car => ({
-    ...car,
-    name: `${car.mark_name} ${car.folder_name}`,
-    engine: `${car.engine_volume} ${car.engine_type === 'diesel' ? 'Diesel' : 'Petrol'}, ${car.hp} hp`
-  }));
+
+  return {
+    total,
+    items: result.rows.map(car => ({
+      ...car,
+      name: `${car.mark_name} ${car.folder_name}`,
+      engine: `${car.engine_volume} ${car.engine_type === 'diesel' ? 'Diesel' : 'Petrol'}, ${car.hp} hp`
+    }))
+  };
 }
 
 // Логирование запроса в БД
@@ -742,11 +754,15 @@ async function logErrorToGraveyard(query, errorType) {
 
 // POST /api/v1/parse - основной endpoint (публичный)
 app.post('/api/v1/parse', userRateLimiter, async (req, res) => {
-  const { query } = req.body;
+  const { query, limit = 10, offset = 0 } = req.body;
 
   if (!query || query.length < 2) {
     return res.status(400).json({ error: 'INVALID_QUERY', details: 'Query too short' });
   }
+
+  // Ограничиваем limit для безопасности
+  const safeLimit = Math.min(Math.max(1, parseInt(limit) || 10), 50);
+  const safeOffset = Math.max(0, parseInt(offset) || 0);
 
   const startTime = Date.now();
   let filters = null;
@@ -771,13 +787,16 @@ app.post('/api/v1/parse', userRateLimiter, async (req, res) => {
   }
 
   let results = [];
+  let total = 0;
   let errorType = null;
 
   if (filters) {
     try {
-      results = await searchCars(filters);
+      const searchResult = await searchCars(filters, safeLimit, safeOffset);
+      results = searchResult.items;
+      total = searchResult.total;
       // Если фильтры есть, но результатов нет - возможно неизвестная марка
-      if (results.length === 0 && filters.mark_name) {
+      if (total === 0 && filters.mark_name) {
         errorType = 'no_results';
       }
     } catch (err) {
@@ -790,21 +809,25 @@ app.post('/api/v1/parse', userRateLimiter, async (req, res) => {
   }
 
   const latencyMs = Date.now() - startTime;
-  logParseSession(query, filters, parsingMethod, latencyMs, costUsd, results.length);
+  logParseSession(query, filters, parsingMethod, latencyMs, costUsd, total);
 
   // Логируем проблемные запросы
   if (errorType) {
     logErrorToGraveyard(query, errorType);
   }
 
-  // Генерируем юмористическое сообщение
-  const message = generateMessage(query, filters, results, errorType);
+  // Генерируем юмористическое сообщение (используем total для сообщений)
+  const message = generateMessage(query, filters, { length: total }, errorType);
 
   res.json({
     success: filters !== null,
     catalog_status: 'loaded',
     filters,
     results,
+    total,
+    limit: safeLimit,
+    offset: safeOffset,
+    hasMore: safeOffset + results.length < total,
     message,
     metrics: {
       parsing_method: parsingMethod,
