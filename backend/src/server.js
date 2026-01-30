@@ -677,9 +677,10 @@ function generateMessage(query, filters, results, errorType) {
     return responses[Math.floor(Math.random() * responses.length)];
   }
 
-  // Успешный поиск
-  if (results.length > 0) {
-    if (results.length === 1) {
+  // Успешный поиск (results.length = total count)
+  const count = results.length;
+  if (count > 0) {
+    if (count === 1) {
       const responses = [
         "Нашёл ровно один вариант — судьба? 😄",
         "Один единственный! Это знак 🎯",
@@ -687,42 +688,43 @@ function generateMessage(query, filters, results, errorType) {
       ];
       return responses[Math.floor(Math.random() * responses.length)];
     }
-    if (results.length <= 3) {
+    if (count <= 3) {
       const responses = [
-        `Вот ${results.length} варианта — небольшой, но достойный выбор! 👌`,
-        `Нашёл ${results.length} штуки. Качество важнее количества! ✨`,
-        `${results.length} варианта на выбор — как раз чтобы не мучиться 😄`
+        `Вот ${count} варианта — небольшой, но достойный выбор! 👌`,
+        `Нашёл ${count} штуки. Качество важнее количества! ✨`,
+        `${count} варианта на выбор — как раз чтобы не мучиться 😄`
       ];
       return responses[Math.floor(Math.random() * responses.length)];
     }
-    if (results.length <= 5) {
+    if (count <= 5) {
       const responses = [
-        `Вот ${results.length} подходящих вариантов. Выбирай! 🎉`,
-        `Нашёл ${results.length} штук — есть из чего выбрать!`,
-        `${results.length} вариантов — золотая середина! 🏆`
+        `Вот ${count} подходящих вариантов. Выбирай! 🎉`,
+        `Нашёл ${count} штук — есть из чего выбрать!`,
+        `${count} вариантов — золотая середина! 🏆`
       ];
       return responses[Math.floor(Math.random() * responses.length)];
     }
-    if (results.length <= 10) {
+    if (count <= 10) {
       const responses = [
-        `Нашёл ${results.length} вариантов — есть из чего выбрать! 🚗`,
-        `${results.length} машин ждут твоего внимания! 👀`,
-        `Отличный улов: ${results.length} вариантов! 🎣`
+        `Нашёл ${count} вариантов — есть из чего выбрать! 🚗`,
+        `${count} машин ждут твоего внимания! 👀`,
+        `Отличный улов: ${count} вариантов! 🎣`
       ];
       return responses[Math.floor(Math.random() * responses.length)];
     }
-    if (results.length <= 30) {
+    // Больше 10 — пагинация, говорим про общее число
+    if (count <= 30) {
       const responses = [
-        `Ого, ${results.length} вариантов! Может, добавим фильтров? 🔍`,
-        `${results.length} машин — богатый выбор! Уточни параметры, если хочешь сузить 📋`,
-        `Нашёл ${results.length} штук! Если много — добавь марку или бюджет 💰`
+        `Нашёл ${count} вариантов! Показываю первые 10, листай дальше 👇`,
+        `${count} машин в базе! Смотри и жми "Показать ещё" 📋`,
+        `Ого, ${count} штук! Листай вниз — там кнопка "ещё" 🔍`
       ];
       return responses[Math.floor(Math.random() * responses.length)];
     }
     const responses = [
-      `Ого, ${results.length} вариантов! 🤯 Точно не хочешь сузить поиск?`,
-      `${results.length} машин — это армия! 🚗🚗🚗 Добавь фильтров, а то утонешь в выборе`,
-      `Нашёл ${results.length} вариантов. Это много! Давай конкретнее: марка? бюджет? тип кузова?`
+      `Ого, ${count} вариантов! 🤯 Показываю по 10, но может сузим поиск?`,
+      `${count} машин — это армия! 🚗 Добавь фильтров или листай постепенно`,
+      `Нашёл ${count} штук! Много? Добавь марку, бюджет или тип кузова 💰`
     ];
     return responses[Math.floor(Math.random() * responses.length)];
   }
