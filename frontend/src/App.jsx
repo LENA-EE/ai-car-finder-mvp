@@ -167,6 +167,7 @@ function UserSearch() {
         return;
       }
       setResult(data);
+      setQuery(""); // Очищаем инпут после успешного ответа
       // Сохраняем в историю только успешные запросы
       addToHistory(q);
       setHistory(getHistory());
@@ -248,15 +249,17 @@ function UserSearch() {
 
       {result && (
         <div className="result">
-          {result.filters ? (
+          {result.message && (
+            <div className="assistant-message">{result.message}</div>
+          )}
+
+          {result.filters && (
             <>
               <p>Фильтры для поиска:</p>
               <pre className="filters">
                 {JSON.stringify(result.filters, null, 2)}
               </pre>
             </>
-          ) : (
-            <p className="error">Не удалось распознать запрос</p>
           )}
 
           {result.results?.length > 0 && (
@@ -268,10 +271,10 @@ function UserSearch() {
                   className="car-card"
                   onClick={() => handleCarClick(car.id)}
                 >
-                  <div className="car-name">{car.name}</div>
+                  <div className="car-name">{car.name || "Нет данных"}</div>
                   <div className="car-details">
-                    {car.engine} · {car.year} ·{" "}
-                    {car.price.toLocaleString("ru-RU")} ₽
+                    {car.engine || "—"} · {car.year || "—"} ·{" "}
+                    {car.price ? car.price.toLocaleString("ru-RU") + " ₽" : "Цена не указана"}
                   </div>
                   <div className="car-hint">Нажмите для подробностей</div>
                 </div>
@@ -303,33 +306,33 @@ function UserSearch() {
             </div>
             <div className="detail-row">
               <span>Кузов</span>
-              <span>{selectedCar.body_type}</span>
+              <span>{selectedCar.body_type || "Нет данных"}</span>
             </div>
             <div className="detail-row">
               <span>Двигатель</span>
               <span>
-                {selectedCar.engine_volume}L {selectedCar.engine_type}
+                {selectedCar.engine_volume || "—"}L {selectedCar.engine_type || "—"}
               </span>
             </div>
             <div className="detail-row">
               <span>Мощность</span>
-              <span>{selectedCar.hp} л.с.</span>
+              <span>{selectedCar.hp ? `${selectedCar.hp} л.с.` : "Нет данных"}</span>
             </div>
             <div className="detail-row">
               <span>КПП</span>
-              <span>{selectedCar.transmission}</span>
+              <span>{selectedCar.transmission || "Нет данных"}</span>
             </div>
             <div className="detail-row">
               <span>Привод</span>
-              <span>{selectedCar.drive_type}</span>
+              <span>{selectedCar.drive_type || "Нет данных"}</span>
             </div>
             <div className="detail-row">
               <span>Год</span>
-              <span>{selectedCar.year}</span>
+              <span>{selectedCar.year || "Нет данных"}</span>
             </div>
             <div className="detail-row">
               <span>Цена</span>
-              <span>{selectedCar.price.toLocaleString("ru-RU")} ₽</span>
+              <span>{selectedCar.price ? `${selectedCar.price.toLocaleString("ru-RU")} ₽` : "Нет данных"}</span>
             </div>
           </div>
         </div>

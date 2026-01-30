@@ -1050,3 +1050,15 @@ h1 {
 .resolve-form button.cancel {
   background: #475569;
 }
+
+/* Assistant Message */
+.assistant-message {
+  background: linear-gradient(135deg, #1e3a5f 0%, #1e293b 100%);
+  border-left: 4px solid #3b82f6;
+  border-radius: 8px;
+  padding: 16px;
+  margin-bottom: 16px;
+  color: #e2e8f0;
+  font-size: 15px;
+  line-height: 1.5;
+}
