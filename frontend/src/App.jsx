@@ -420,6 +420,8 @@ function AdminDashboard() {
 function CatalogUpload() {
   const [file, setFile] = useState(null);
   const [uploading, setUploading] = useState(false);
+  const [uploadProgress, setUploadProgress] = useState(0);
+  const [uploadStage, setUploadStage] = useState(''); // 'uploading', 'parsing', 'saving'
   const [result, setResult] = useState(null);
   const [error, setError] = useState(null);
   const [dragOver, setDragOver] = useState(false);
@@ -477,37 +479,69 @@ function CatalogUpload() {
     if (!file) return;
 
     setUploading(true);
+    setUploadProgress(0);
+    setUploadStage('uploading');
     setError(null);
     setResult(null);
 
-    try {
-      const formData = new FormData();
-      formData.append('file', file);
+    const formData = new FormData();
+    formData.append('file', file);
 
-      const token = getToken();
-      const res = await fetch(`${API_URL}/api/v1/admin/catalog/upload`, {
-        method: 'POST',
-        headers: {
-          'Authorization': `Bearer ${token}`
-        },
-        body: formData
-      });
+    const xhr = new XMLHttpRequest();
 
-      const data = await res.json();
-
-      if (!res.ok) {
-        setError(data.details || data.error || 'Ошибка загрузки');
-        return;
+    xhr.upload.addEventListener('progress', (e) => {
+      if (e.lengthComputable) {
+        // Загрузка файла = 0-50%
+        const percent = Math.round((e.loaded / e.total) * 50);
+        setUploadProgress(percent);
       }
+    });
 
-      setResult(data);
-      setFile(null);
-      fetchCatalogSize();
-    } catch (err) {
-      setError(`Ошибка: ${err.message}`);
-    } finally {
+    xhr.addEventListener('load', () => {
+      try {
+        const data = JSON.parse(xhr.responseText);
+        if (xhr.status >= 200 && xhr.status < 300) {
+          setUploadProgress(100);
+          setUploadStage('done');
+          setResult(data);
+          setFile(null);
+          fetchCatalogSize();
+        } else {
+          setError(data.details || data.error || 'Ошибка загрузки');
+        }
+      } catch (err) {
+        setError('Ошибка обработки ответа');
+      }
       setUploading(false);
-    }
+    });
+
+    xhr.addEventListener('error', () => {
+      setError('Ошибка соединения');
+      setUploading(false);
+    });
+
+    // Когда файл загружен, начинается обработка на сервере
+    xhr.upload.addEventListener('load', () => {
+      setUploadStage('parsing');
+      setUploadProgress(50);
+      // Симулируем прогресс обработки
+      let progress = 50;
+      const interval = setInterval(() => {
+        progress += 5;
+        if (progress >= 95) {
+          clearInterval(interval);
+          setUploadProgress(95);
+          setUploadStage('saving');
+        } else {
+          setUploadProgress(progress);
+        }
+      }, 200);
+    });
+
+    const token = getToken();
+    xhr.open('POST', `${API_URL}/api/v1/admin/catalog/upload`);
+    xhr.setRequestHeader('Authorization', `Bearer ${token}`);
+    xhr.send(formData);
   };
 
   const handleClearCatalog = async () => {
@@ -564,6 +598,26 @@ function CatalogUpload() {
           </div>
         )}
       </div>
+
+      {uploading && (
+        <div className="upload-progress">
+          <div className="progress-bar">
+            <div
+              className="progress-fill"
+              style={{ width: `${uploadProgress}%` }}
+            />
+          </div>
+          <div className="progress-info">
+            <span className="progress-stage">
+              {uploadStage === 'uploading' && '📤 Загрузка файла...'}
+              {uploadStage === 'parsing' && '🔍 Парсинг данных...'}
+              {uploadStage === 'saving' && '💾 Сохранение в базу...'}
+              {uploadStage === 'done' && '✅ Готово!'}
+            </span>
+            <span className="progress-percent">{uploadProgress}%</span>
+          </div>
+        </div>
+      )}
 
       <div className="upload-actions">
         <button

@@ -1062,3 +1062,43 @@ h1 {
   font-size: 15px;
   line-height: 1.5;
 }
+
+/* Upload Progress Bar */
+.upload-progress {
+  margin-bottom: 16px;
+  padding: 16px;
+  background: #334155;
+  border-radius: 8px;
+}
+
+.progress-bar {
+  height: 12px;
+  background: #1e293b;
+  border-radius: 6px;
+  overflow: hidden;
+  margin-bottom: 12px;
+}
+
+.progress-fill {
+  height: 100%;
+  background: linear-gradient(90deg, #3b82f6, #22d3ee);
+  border-radius: 6px;
+  transition: width 0.3s ease;
+}
+
+.progress-info {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.progress-stage {
+  color: #e2e8f0;
+  font-size: 14px;
+}
+
+.progress-percent {
+  color: #22d3ee;
+  font-weight: bold;
+  font-size: 14px;
+}
