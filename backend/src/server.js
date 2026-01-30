@@ -740,45 +740,6 @@ async function logErrorToGraveyard(query, errorType) {
 // PUBLIC API
 // ===========================================
 
-// GET /api/v1/debug/fields - показать уникальные значения полей (для диагностики)
-app.get('/api/v1/debug/fields', async (req, res) => {
-  const mark = req.query.mark || 'BMW';
-
-  try {
-    const engineTypes = await pool.query(
-      `SELECT DISTINCT engine_type, COUNT(*) as cnt FROM cars_catalog
-       WHERE LOWER(mark_name) = LOWER($1) AND engine_type IS NOT NULL
-       GROUP BY engine_type ORDER BY cnt DESC LIMIT 20`, [mark]
-    );
-
-    const driveTypes = await pool.query(
-      `SELECT DISTINCT drive_type, COUNT(*) as cnt FROM cars_catalog
-       WHERE LOWER(mark_name) = LOWER($1) AND drive_type IS NOT NULL
-       GROUP BY drive_type ORDER BY cnt DESC LIMIT 20`, [mark]
-    );
-
-    const transmissions = await pool.query(
-      `SELECT DISTINCT transmission, COUNT(*) as cnt FROM cars_catalog
-       WHERE LOWER(mark_name) = LOWER($1) AND transmission IS NOT NULL
-       GROUP BY transmission ORDER BY cnt DESC LIMIT 20`, [mark]
-    );
-
-    const total = await pool.query(
-      `SELECT COUNT(*) as total FROM cars_catalog WHERE LOWER(mark_name) = LOWER($1)`, [mark]
-    );
-
-    res.json({
-      mark,
-      total_records: parseInt(total.rows[0]?.total) || 0,
-      engine_types: engineTypes.rows,
-      drive_types: driveTypes.rows,
-      transmissions: transmissions.rows
-    });
-  } catch (err) {
-    res.status(500).json({ error: err.message });
-  }
-});
-
 // POST /api/v1/parse - основной endpoint (публичный)
 app.post('/api/v1/parse', userRateLimiter, async (req, res) => {
   const { query } = req.body;
