@@ -154,6 +154,12 @@ async function validateQuery(query) {
     return regexValidate(query);
   }
 
+  // If no API key, use regex fallback
+  if (!openai) {
+    console.log('[SecurityAgent] No OpenAI client, using regex fallback');
+    return regexValidate(query);
+  }
+
   try {
     const response = await openai.chat.completions.create({
       model: agentsConfig.security.model,
@@ -166,8 +172,21 @@ async function validateQuery(query) {
       response_format: { type: 'json_object' }
     });
 
-    const content = response.choices[0].message.content;
-    const result = JSON.parse(content);
+    // Safely extract content
+    const content = response?.choices?.[0]?.message?.content;
+    if (!content) {
+      console.error('[SecurityAgent] Empty response from LLM, falling back to regex');
+      return regexValidate(query);
+    }
+
+    // Safely parse JSON
+    let result;
+    try {
+      result = JSON.parse(content);
+    } catch (parseErr) {
+      console.error(`[SecurityAgent] Invalid JSON from LLM: ${content}, falling back to regex`);
+      return regexValidate(query);
+    }
 
     // Log security events
     if (!result.safe) {
