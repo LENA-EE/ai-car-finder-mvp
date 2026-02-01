@@ -52,8 +52,22 @@ async function llmParse(query) {
     response_format: { type: 'json_object' }
   });
 
-  const content = response.choices[0].message.content;
-  const rawFilters = JSON.parse(content);
+  // Safely extract content
+  const content = response?.choices?.[0]?.message?.content;
+  if (!content) {
+    console.error('[LLM Parser] Empty response from LLM');
+    return { filters: null, costUsd: 0 };
+  }
+
+  // Safely parse JSON
+  let rawFilters;
+  try {
+    rawFilters = JSON.parse(content);
+  } catch (parseErr) {
+    console.error(`[LLM Parser] Invalid JSON from LLM: ${content}`);
+    return { filters: null, costUsd: 0 };
+  }
+
   const filters = sanitizeFilters(rawFilters);
 
   const inputTokens = response.usage?.prompt_tokens || 0;
