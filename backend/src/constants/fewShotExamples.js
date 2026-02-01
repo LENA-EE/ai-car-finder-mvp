@@ -12,6 +12,23 @@ const FEW_SHOT_EXAMPLES = [
     input: "мерс до 5 миллионов 2020",
     output: { mark_name: "Mercedes-Benz", price_max: 5000000, year_from: 2020 }
   },
+  // Power-related queries (мощная, мощный, быстрая, резвая)
+  {
+    input: "тойота 2020 мощная",
+    output: { mark_name: "Toyota", year_from: 2020, min_hp: 200 }
+  },
+  {
+    input: "мощный кроссовер до 3 млн",
+    output: { body_type: "Внедорожник 5 дв.", price_max: 3000000, min_hp: 200 }
+  },
+  {
+    input: "быстрая машина автомат",
+    output: { transmission: "AT", min_hp: 250 }
+  },
+  {
+    input: "резвая бмв седан",
+    output: { mark_name: "BMW", body_type: "Седан", min_hp: 200 }
+  },
   // Slang and abbreviations
   {
     input: "до 700к, автомат, хэтч",
@@ -24,6 +41,23 @@ const FEW_SHOT_EXAMPLES = [
   {
     input: "немец седан механика",
     output: { body_type: "Седан", transmission: "MT" }
+  },
+  // Unsupported filters (color, mileage, etc.) → ignore them
+  {
+    input: "красная тачка",
+    output: {}
+  },
+  {
+    input: "красная bmw x5",
+    output: { mark_name: "BMW", folder_name: "X5" }
+  },
+  {
+    input: "белый мерс седан 2020",
+    output: { mark_name: "Mercedes-Benz", body_type: "Седан", year_from: 2020 }
+  },
+  {
+    input: "чёрная тойота с пробегом до 50000",
+    output: { mark_name: "Toyota" }
   },
   // Irrelevant queries → empty JSON
   {
