@@ -2,7 +2,7 @@ function generateMessage(query, filters, results, errorType) {
   const q = query.toLowerCase();
 
   // Security Agent categories
-  if (errorType === 'injection') {
+  if (errorType === "injection") {
     const responses = [
       "Хорошая попытка! 😏 Но я тут только машины подбираю, секретов не выдаю. Так что — какое авто ищем?",
       "Ого, хакер в чате! 🕵️ К сожалению, мои секреты охраняет дракон. Давай лучше про машины?",
@@ -10,75 +10,93 @@ function generateMessage(query, filters, results, errorType) {
       "Мои инструкции? Инструкция одна: помочь тебе найти тачку мечты. Поехали! 🚀",
       "Неплохая попытка взлома! Ставлю 7/10 за креативность. А теперь давай к машинам? 😄",
       "*включает режим непробиваемости* 🛡️ Секреты не выдаю, но машины подбираю отлично!",
-      "Эй, я же не ChatGPT, я скромный автоподборщик! Давай лучше про тачки поговорим 🚗"
+      "Эй, я же не ChatGPT, я скромный автоподборщик! Давай лучше про тачки поговорим 🚗",
     ];
     return responses[Math.floor(Math.random() * responses.length)];
   }
 
-  if (errorType === 'toxic') {
+  if (errorType === "toxic") {
     const responses = [
       "Эй, давай без этого! 🙅 Я тут машины ищу, а не ругаюсь. Какое авто нужно?",
       "Воу-воу, полегче! 😅 Давай лучше про машины поговорим, а?",
-      "Это было... необязательно 😐 Но я не обижаюсь. Так какую тачку ищем?"
+      "Это было... необязательно 😐 Но я не обижаюсь. Так какую тачку ищем?",
     ];
     return responses[Math.floor(Math.random() * responses.length)];
   }
 
-  if (errorType === 'off_topic') {
+  if (errorType === "off_topic") {
     const responses = [
       "Интересно, но я специализируюсь на автомобилях 🚗 Расскажи, какую машину ищешь?",
       "Это не совсем моя тема! Я про машины. Марка, бюджет, кузов — давай подберём?",
-      "Хм, это не про авто 🤔 Но если нужна машина — я тут! Что ищем?"
+      "Хм, это не про авто 🤔 Но если нужна машина — я тут! Что ищем?",
     ];
     return responses[Math.floor(Math.random() * responses.length)];
   }
 
   // Legacy regex patterns (fallback if Security Agent disabled)
   const offTopicPatterns = [
-    'самолёт', 'самолет', 'яхт', 'вертолёт', 'вертолет', 'корабл',
-    'ракет', 'поезд', 'велосипед', 'мотоцикл', 'лодк', 'катер',
-    'трактор', 'комбайн', 'танк', 'подводн'
+    "самолёт",
+    "самолет",
+    "яхт",
+    "вертолёт",
+    "вертолет",
+    "корабл",
+    "ракет",
+    "поезд",
+    "велосипед",
+    "мотоцикл",
+    "лодк",
+    "катер",
+    "трактор",
+    "комбайн",
+    "танк",
+    "подводн",
   ];
-  const isOffTopic = offTopicPatterns.some(p => q.includes(p));
+  const isOffTopic = offTopicPatterns.some((p) => q.includes(p));
 
-  if (errorType === 'insufficient_filters') {
+  if (errorType === "insufficient_filters") {
     const filterCount = filters ? Object.keys(filters).length : 0;
     const responses = [
       `Понял ${filterCount} параметр(а), но для точного поиска нужно минимум 3 🎯 Добавь марку, бюджет, тип кузова, год или двигатель!`,
       `Маловато данных — всего ${filterCount}! Уточни запрос: марка + бюджет + кузов = идеальный результат 🔍`,
       `${filterCount} из 3 параметров — почти! Добавь ещё что-нибудь: год, тип двигателя, привод? 💪`,
       `Хм, ${filterCount} фильтр(а) — мало для точного поиска 🤔 Напиши подробнее: например, «BMW X5 дизель до 3 млн»`,
-      `Нужно больше деталей! Пока понял только ${filterCount} параметр(а). Добавь марку/модель, бюджет или тип кузова 📝`
+      `Нужно больше деталей! Пока понял только ${filterCount} параметр(а). Добавь марку/модель, бюджет или тип кузова 📝`,
     ];
     return responses[Math.floor(Math.random() * responses.length)];
   }
 
-  if (isOffTopic || (filters === null && !isInjection)) {
-    if (q.includes('самолёт') || q.includes('самолет')) {
+  if (isOffTopic || (filters === null && errorType !== "injection")) {
+    if (q.includes("самолёт") || q.includes("самолет")) {
       return "Самолёты — это круто, но я специализируюсь на том, что ездит по земле 🛣️ Давай подберём тебе машину, которая хотя бы *ощущается* как полёт?";
     }
-    if (q.includes('яхт') || q.includes('лодк') || q.includes('катер')) {
+    if (q.includes("яхт") || q.includes("лодк") || q.includes("катер")) {
       return "Яхты — это для другого приложения (и другого бюджета 💸). А пока давай найдём авто? Может, кабриолет? Тоже ветер в волосах!";
     }
-    if (q.includes('вертолёт') || q.includes('вертолет')) {
+    if (q.includes("вертолёт") || q.includes("вертолет")) {
       return "Вертолёт? Размах! 🚁 Но пока могу предложить только наземный транспорт. Зато с панорамной крышей — почти то же самое!";
     }
-    if (q.includes('ракет')) {
+    if (q.includes("ракет")) {
       return "Ракету? Илон, это ты? 🚀 У меня только автомобили, но некоторые разгоняются почти как ракеты!";
     }
-    if (q.includes('танк')) {
+    if (q.includes("танк")) {
       return "Танк — это серьёзно! 🪖 Могу предложить бронированный внедорожник, почти то же самое, но легальнее 😄";
     }
-    if (q.includes('велосипед')) {
+    if (q.includes("велосипед")) {
       return "Велосипед — это экологично! 🚴 Но раз уж ты здесь... может, электромобиль? Тоже зелёный, но с крышей!";
     }
-    if (q.includes('как') && (q.includes('пользова') || q.includes('работа'))) {
+    if (q.includes("как") && (q.includes("пользова") || q.includes("работа"))) {
       return "Всё просто! Напиши, какую машину ищешь 🔍 Например: «BMW X5 дизель» или «кроссовер до 2 млн автомат». А я найду варианты!";
     }
-    if (q.includes('привет') || q.includes('здравствуй') || q.includes('хай') || q.includes('hello')) {
+    if (
+      q.includes("привет") ||
+      q.includes("здравствуй") ||
+      q.includes("хай") ||
+      q.includes("hello")
+    ) {
       return "Привет! 👋 Я твой автомобильный помощник. Расскажи, какую машину ищешь — марку, бюджет, тип кузова?";
     }
-    if (q.includes('спасибо') || q.includes('благодар')) {
+    if (q.includes("спасибо") || q.includes("благодар")) {
       return "Всегда пожалуйста! 😊 Если нужно ещё что-то найти — я тут!";
     }
 
@@ -102,7 +120,7 @@ function generateMessage(query, filters, results, errorType) {
       "Что-то пошло не так в моей голове 🤖 Давай проще: какую тачку ищем?",
       "Сложна! 😵 Напиши понятнее: «хочу BMW» или «кроссовер до 3 млн»",
       "Ты меня сломал(а)! Шучу 😄 Просто напиши марку или параметры авто",
-      "Не распознал, но не сдаюсь! 💪 Попробуй ещё раз: марка? бюджет? кузов?"
+      "Не распознал, но не сдаюсь! 💪 Попробуй ещё раз: марка? бюджет? кузов?",
     ];
     return responses[Math.floor(Math.random() * responses.length)];
   }
@@ -115,7 +133,7 @@ function generateMessage(query, filters, results, errorType) {
       "Ноль результатов — либо ты ищешь единорога, либо мы не туда смотрим 🔍",
       "Пустота... как в моём сердце до появления этого запроса 💔 Попробуем другие фильтры?",
       "Такого добра в каталоге нет 🤷 Может, расширим поиск?",
-      "Миссия невыполнима! 🕵️ Но если изменить параметры — шансы есть!"
+      "Миссия невыполнима! 🕵️ Но если изменить параметры — шансы есть!",
     ];
     return responses[Math.floor(Math.random() * responses.length)];
   }
@@ -126,7 +144,7 @@ function generateMessage(query, filters, results, errorType) {
       const responses = [
         "Нашёл ровно один вариант — судьба? 😄",
         "Один единственный! Это знак 🎯",
-        "Вот он, твой избранник! Осталось только познакомиться 🚗"
+        "Вот он, твой избранник! Осталось только познакомиться 🚗",
       ];
       return responses[Math.floor(Math.random() * responses.length)];
     }
@@ -134,7 +152,7 @@ function generateMessage(query, filters, results, errorType) {
       const responses = [
         `Вот ${count} варианта — небольшой, но достойный выбор! 👌`,
         `Нашёл ${count} штуки. Качество важнее количества! ✨`,
-        `${count} варианта на выбор — как раз чтобы не мучиться 😄`
+        `${count} варианта на выбор — как раз чтобы не мучиться 😄`,
       ];
       return responses[Math.floor(Math.random() * responses.length)];
     }
@@ -142,7 +160,7 @@ function generateMessage(query, filters, results, errorType) {
       const responses = [
         `Вот ${count} подходящих вариантов. Выбирай! 🎉`,
         `Нашёл ${count} штук — есть из чего выбрать!`,
-        `${count} вариантов — золотая середина! 🏆`
+        `${count} вариантов — золотая середина! 🏆`,
       ];
       return responses[Math.floor(Math.random() * responses.length)];
     }
@@ -150,7 +168,7 @@ function generateMessage(query, filters, results, errorType) {
       const responses = [
         `Нашёл ${count} вариантов — есть из чего выбрать! 🚗`,
         `${count} машин ждут твоего внимания! 👀`,
-        `Отличный улов: ${count} вариантов! 🎣`
+        `Отличный улов: ${count} вариантов! 🎣`,
       ];
       return responses[Math.floor(Math.random() * responses.length)];
     }
@@ -158,14 +176,14 @@ function generateMessage(query, filters, results, errorType) {
       const responses = [
         `Нашёл ${count} вариантов! Показываю первые 10, листай дальше 👇`,
         `${count} машин в базе! Смотри и жми "Показать ещё" 📋`,
-        `Ого, ${count} штук! Листай вниз — там кнопка "ещё" 🔍`
+        `Ого, ${count} штук! Листай вниз — там кнопка "ещё" 🔍`,
       ];
       return responses[Math.floor(Math.random() * responses.length)];
     }
     const responses = [
       `Ого, ${count} вариантов! 🤯 Показываю по 10, но может сузим поиск?`,
       `${count} машин — это армия! 🚗 Добавь фильтров или листай постепенно`,
-      `Нашёл ${count} штук! Много? Добавь марку, бюджет или тип кузова 💰`
+      `Нашёл ${count} штук! Много? Добавь марку, бюджет или тип кузова 💰`,
     ];
     return responses[Math.floor(Math.random() * responses.length)];
   }

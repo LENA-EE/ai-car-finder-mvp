@@ -10,54 +10,60 @@ const { security } = require('../services/agents');
 const MIN_FILTERS_REQUIRED = 3;
 
 async function parse(req, res) {
-  const { query, limit = 10, offset = 0 } = req.body;
+  try {
+    const { query, limit = 10, offset = 0 } = req.body;
 
-  if (!query || query.length < 2) {
-    return res.status(400).json({ error: 'INVALID_QUERY', details: 'Query too short' });
-  }
-
-  const safeLimit = Math.min(Math.max(1, parseInt(limit) || 10), 50);
-  const safeOffset = Math.max(0, parseInt(offset) || 0);
-
-  const startTime = Date.now();
-  let filters = null;
-  let parsingMethod = 'keyword';
-  let costUsd = 0;
-  let securityCheck = null;
-
-  // Step 1: Security Agent validates query
-  if (config.llmEnabled) {
-    securityCheck = await security.validateQuery(query);
-
-    if (!securityCheck.safe) {
-      const latencyMs = Date.now() - startTime;
-      logParseSession(query, null, 'blocked', latencyMs, 0, 0);
-      logErrorToGraveyard(query, securityCheck.category);
-
-      const message = generateMessage(query, null, { length: 0 }, securityCheck.category);
-
-      return res.json({
-        success: false,
-        catalog_status: 'loaded',
-        filters: null,
-        results: [],
-        total: 0,
-        limit: safeLimit,
-        offset: safeOffset,
-        hasMore: false,
-        message,
-        metrics: {
-          parsing_method: 'blocked',
-          latency_ms: latencyMs,
-          cost_usd: 0,
-          security: {
-            category: securityCheck.category,
-            reason: securityCheck.reason
-          }
-        }
-      });
+    if (!query || query.length < 2) {
+      return res.status(400).json({ error: 'INVALID_QUERY', details: 'Query too short' });
     }
-  }
+
+    const safeLimit = Math.min(Math.max(1, parseInt(limit) || 10), 50);
+    const safeOffset = Math.max(0, parseInt(offset) || 0);
+
+    const startTime = Date.now();
+    let filters = null;
+    let parsingMethod = 'keyword';
+    let costUsd = 0;
+    let securityCheck = null;
+
+    // Step 1: Security Agent validates query
+    if (config.llmEnabled) {
+      try {
+        securityCheck = await security.validateQuery(query);
+      } catch (secErr) {
+        console.error('Security agent error, skipping:', secErr.message);
+        securityCheck = { safe: true, category: 'error', reason: 'Security check failed' };
+      }
+
+      if (!securityCheck.safe) {
+        const latencyMs = Date.now() - startTime;
+        logParseSession(query, null, 'blocked', latencyMs, 0, 0);
+        logErrorToGraveyard(query, securityCheck.category);
+
+        const message = generateMessage(query, null, { length: 0 }, securityCheck.category);
+
+        return res.json({
+          success: false,
+          catalog_status: 'loaded',
+          filters: null,
+          results: [],
+          total: 0,
+          limit: safeLimit,
+          offset: safeOffset,
+          hasMore: false,
+          message,
+          metrics: {
+            parsing_method: 'blocked',
+            latency_ms: latencyMs,
+            cost_usd: 0,
+            security: {
+              category: securityCheck.category,
+              reason: securityCheck.reason
+            }
+          }
+        });
+      }
+    }
 
   // Step 2: Parser Agent extracts filters
   if (config.llmEnabled) {
@@ -126,6 +132,16 @@ async function parse(req, res) {
       cost_usd: costUsd
     }
   });
+
+  } catch (err) {
+    console.error('Parse controller error:', err);
+    res.status(500).json({
+      success: false,
+      error: 'INTERNAL_ERROR',
+      message: 'Что-то пошло не так, попробуйте ещё раз',
+      details: err.message
+    });
+  }
 }
 
 module.exports = { parse };
