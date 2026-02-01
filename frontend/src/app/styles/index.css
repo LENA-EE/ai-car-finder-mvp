@@ -183,7 +183,7 @@ h1 {
   color: #64748b;
 }
 
-/* Модальное окно */
+/* Modal */
 .modal {
   position: fixed;
   top: 0;
@@ -258,7 +258,7 @@ h1 {
   color: #22d3ee;
 }
 
-/* Навигация */
+/* Navigation */
 .nav {
   display: flex;
   gap: 8px;

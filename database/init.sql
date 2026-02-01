@@ -98,7 +98,7 @@ CREATE INDEX IF NOT EXISTS idx_audit_action_type ON admin_audit_log(action_type)
 -- ===========================================
 CREATE TABLE IF NOT EXISTS prompt_versions (
     id SERIAL PRIMARY KEY,
-    version INTEGER NOT NULL,
+    version INTEGER NOT NULL UNIQUE,
     system_prompt TEXT NOT NULL,
     temperature FLOAT DEFAULT 0.1,
     max_tokens INTEGER DEFAULT 200,
@@ -110,7 +110,7 @@ CREATE TABLE IF NOT EXISTS prompt_versions (
 -- Default prompt
 INSERT INTO prompt_versions (version, system_prompt, temperature, max_tokens, status)
 VALUES (1, 'Ты парсер запросов для каталога Auto.ru. Преобразуй текст в JSON фильтры.', 0.1, 200, 'active')
-ON CONFLICT DO NOTHING;
+ON CONFLICT (version) DO NOTHING;
 
 -- ===========================================
 -- 6. ERROR GRAVEYARD (Top parsing errors)
@@ -174,7 +174,7 @@ VALUES
     ('BMW', 'X5', 'Внедорожник 5 дв.', 3.0, 249, 'AT', '4WD', 'diesel', 2019, 4200000),
     ('BMW', 'X5', 'Внедорожник 5 дв.', 3.0, 340, 'AT', '4WD', 'gasoline', 2020, 4800000),
     ('Toyota', 'RAV4', 'Внедорожник 5 дв.', 2.0, 150, 'CVT', 'FWD', 'gasoline', 2021, 2500000)
-ON CONFLICT DO NOTHING;
+ON CONFLICT (id) DO NOTHING;
 
 -- ===========================================
 -- GRANT PERMISSIONS
