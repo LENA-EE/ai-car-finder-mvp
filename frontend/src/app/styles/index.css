@@ -1129,3 +1129,90 @@ h1 {
   transform: none;
   box-shadow: none;
 }
+
+/* Agents Status */
+.agents-status {
+  margin: 20px 0;
+  padding-top: 20px;
+  border-top: 1px solid #334155;
+}
+
+.agents-status h3 {
+  color: #e2e8f0;
+  font-size: 16px;
+  margin-bottom: 12px;
+}
+
+.agents-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 12px;
+}
+
+@media (max-width: 600px) {
+  .agents-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
+.agent-card {
+  background: #334155;
+  border-radius: 8px;
+  padding: 12px;
+}
+
+.agent-header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 10px;
+  padding-bottom: 8px;
+  border-bottom: 1px solid #475569;
+}
+
+.agent-icon {
+  font-size: 18px;
+}
+
+.agent-name {
+  flex: 1;
+  color: #e2e8f0;
+  font-weight: 600;
+  font-size: 13px;
+}
+
+.agent-status {
+  font-size: 14px;
+}
+
+.agent-details {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.agent-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  font-size: 12px;
+}
+
+.agent-row .label {
+  color: #94a3b8;
+}
+
+.agent-row .value {
+  font-weight: 500;
+}
+
+.agent-row .value.model {
+  color: #22d3ee;
+  font-family: monospace;
+  font-size: 11px;
+}
+
+.agent-row .value.fallback {
+  color: #f59e0b;
+  font-size: 11px;
+}

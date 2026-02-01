@@ -5,6 +5,7 @@ const { generateMessage } = require('../services/parsing/message.service');
 const { searchCars } = require('../services/search/cars.service');
 const { logParseSession } = require('../repositories/sessions.repository');
 const { logErrorToGraveyard } = require('../repositories/errors.repository');
+const { security } = require('../services/agents');
 
 const MIN_FILTERS_REQUIRED = 3;
 
@@ -22,7 +23,43 @@ async function parse(req, res) {
   let filters = null;
   let parsingMethod = 'keyword';
   let costUsd = 0;
+  let securityCheck = null;
 
+  // Step 1: Security Agent validates query
+  if (config.llmEnabled) {
+    securityCheck = await security.validateQuery(query);
+
+    if (!securityCheck.safe) {
+      const latencyMs = Date.now() - startTime;
+      logParseSession(query, null, 'blocked', latencyMs, 0, 0);
+      logErrorToGraveyard(query, securityCheck.category);
+
+      const message = generateMessage(query, null, { length: 0 }, securityCheck.category);
+
+      return res.json({
+        success: false,
+        catalog_status: 'loaded',
+        filters: null,
+        results: [],
+        total: 0,
+        limit: safeLimit,
+        offset: safeOffset,
+        hasMore: false,
+        message,
+        metrics: {
+          parsing_method: 'blocked',
+          latency_ms: latencyMs,
+          cost_usd: 0,
+          security: {
+            category: securityCheck.category,
+            reason: securityCheck.reason
+          }
+        }
+      });
+    }
+  }
+
+  // Step 2: Parser Agent extracts filters
   if (config.llmEnabled) {
     try {
       const llmResult = await llmParse(query);

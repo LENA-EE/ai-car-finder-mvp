@@ -1,14 +1,8 @@
 function generateMessage(query, filters, results, errorType) {
   const q = query.toLowerCase();
 
-  const injectionPatterns = [
-    'игнорируй', 'ignore', 'системн', 'system', 'промпт', 'prompt',
-    'инструкци', 'instruction', 'правила', 'rules', 'покажи таблицу',
-    'select', 'users', 'выведи данные', 'database', 'базу данных'
-  ];
-  const isInjection = injectionPatterns.some(p => q.includes(p));
-
-  if (isInjection) {
+  // Security Agent categories
+  if (errorType === 'injection') {
     const responses = [
       "Хорошая попытка! 😏 Но я тут только машины подбираю, секретов не выдаю. Так что — какое авто ищем?",
       "Ого, хакер в чате! 🕵️ К сожалению, мои секреты охраняет дракон. Давай лучше про машины?",
@@ -21,6 +15,25 @@ function generateMessage(query, filters, results, errorType) {
     return responses[Math.floor(Math.random() * responses.length)];
   }
 
+  if (errorType === 'toxic') {
+    const responses = [
+      "Эй, давай без этого! 🙅 Я тут машины ищу, а не ругаюсь. Какое авто нужно?",
+      "Воу-воу, полегче! 😅 Давай лучше про машины поговорим, а?",
+      "Это было... необязательно 😐 Но я не обижаюсь. Так какую тачку ищем?"
+    ];
+    return responses[Math.floor(Math.random() * responses.length)];
+  }
+
+  if (errorType === 'off_topic') {
+    const responses = [
+      "Интересно, но я специализируюсь на автомобилях 🚗 Расскажи, какую машину ищешь?",
+      "Это не совсем моя тема! Я про машины. Марка, бюджет, кузов — давай подберём?",
+      "Хм, это не про авто 🤔 Но если нужна машина — я тут! Что ищем?"
+    ];
+    return responses[Math.floor(Math.random() * responses.length)];
+  }
+
+  // Legacy regex patterns (fallback if Security Agent disabled)
   const offTopicPatterns = [
     'самолёт', 'самолет', 'яхт', 'вертолёт', 'вертолет', 'корабл',
     'ракет', 'поезд', 'велосипед', 'мотоцикл', 'лодк', 'катер',

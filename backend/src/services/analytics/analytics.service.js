@@ -1,6 +1,7 @@
 const sessionsRepo = require('../../repositories/sessions.repository');
 const carsRepo = require('../../repositories/cars.repository');
 const config = require('../../config');
+const agentsConfig = require('../../config/agents');
 
 async function getAnalytics() {
   const [todayStats, methodStats, topBrands, catalogSize] = await Promise.all([
@@ -38,7 +39,24 @@ async function getAnalytics() {
       total_records: catalogSize,
       last_updated: new Date().toISOString()
     },
-    llm_enabled: config.llmEnabled
+    llm_enabled: config.llmEnabled,
+    agents: {
+      security: {
+        enabled: agentsConfig.security.enabled,
+        model: agentsConfig.security.enabled ? agentsConfig.security.model : null,
+        fallback: 'regex'
+      },
+      parser: {
+        enabled: config.llmEnabled,
+        model: config.llmEnabled ? agentsConfig.parser.model : null,
+        fallback: 'keyword'
+      },
+      response: {
+        enabled: agentsConfig.response.enabled,
+        model: agentsConfig.response.enabled ? agentsConfig.response.model : null,
+        fallback: 'templates'
+      }
+    }
   };
 }
 

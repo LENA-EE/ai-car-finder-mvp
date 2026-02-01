@@ -23,6 +23,58 @@
 - Rate limiting (100 req/min user, 50 req/min admin)
 - JWT токены (24h expiry)
 - Валидация входных данных
+- **Мультиагентная система безопасности** (см. ниже)
+
+## Мультиагентная архитектура
+
+Система использует несколько специализированных LLM-агентов:
+
+```
+Запрос пользователя
+         │
+         ▼
+┌─────────────────────────┐
+│  🛡️ Security Agent      │  ← Проверяет безопасность
+│  - Prompt injection     │
+│  - Off-topic запросы    │
+│  - Toxic контент        │
+└───────────┬─────────────┘
+            │ safe ✓
+            ▼
+┌─────────────────────────┐
+│  🔍 Parser Agent        │  ← Извлекает фильтры
+│  - Понимает сленг       │
+│  - JSON фильтры         │
+└───────────┬─────────────┘
+            │
+            ▼
+       Результаты
+```
+
+### Конфигурация агентов
+
+Файл: `backend/src/config/agents.js`
+
+```javascript
+module.exports = {
+  security: {
+    enabled: true,
+    model: process.env.SECURITY_AGENT_MODEL || 'deepseek/deepseek-chat',
+    // Рекомендуется: 'anthropic/claude-3-haiku' (быстрее, дешевле)
+  },
+  parser: {
+    model: process.env.PARSER_AGENT_MODEL || 'deepseek/deepseek-chat',
+  },
+};
+```
+
+### Смена модели агента
+
+```bash
+# В Railway или .env:
+SECURITY_AGENT_MODEL=anthropic/claude-3-haiku
+PARSER_AGENT_MODEL=openai/gpt-4o-mini
+```
 
 ## Tech Stack
 
@@ -93,22 +145,31 @@ docker-compose up --build
 
 ```
 ai-car-finder-mvp/
-├── frontend/          # React + Vite
-│   ├── src/
-│   │   ├── App.jsx    # Main components
-│   │   └── App.css    # Styles
-│   └── Dockerfile
-├── backend/           # Node.js + Express
-│   ├── src/
-│   │   └── server.js  # API endpoints
-│   └── Dockerfile
-├── database/          # PostgreSQL
-│   └── init.sql       # Schema + seed data
-├── config/            # Configuration
-│   └── env.example    # Environment template
-├── .github/
-│   └── workflows/
-│       └── deploy.yml # CI/CD pipeline
+├── frontend/                    # React + Vite (FSD architecture)
+│   └── src/
+│       ├── app/                 # App setup
+│       ├── pages/               # Page components
+│       ├── features/            # Feature modules
+│       ├── entities/            # Domain entities
+│       ├── shared/              # Shared utilities
+│       └── widgets/             # UI widgets
+├── backend/                     # Node.js + Express
+│   └── src/
+│       ├── config/              # Configuration
+│       │   └── agents.js        # 🆕 Multi-agent config
+│       ├── controllers/         # Route handlers
+│       ├── services/
+│       │   ├── agents/          # 🆕 LLM Agents
+│       │   │   ├── security.agent.js  # Security validation
+│       │   │   └── index.js
+│       │   ├── parsing/         # Query parsing
+│       │   └── search/          # DB search
+│       ├── repositories/        # Database access
+│       └── middleware/          # Express middleware
+├── database/
+│   └── init.sql                 # Schema + seed data
+├── config/
+│   └── env.example              # Environment template
 ├── docker-compose.yml
 └── README.md
 ```
@@ -121,9 +182,10 @@ DATABASE_URL=postgres://user:password@host:5432/db
 
 # LLM (OpenRouter)
 OPENROUTER_API_KEY=sk-or-v1-...
-LLM_MODEL=deepseek/deepseek-chat
-LLM_TEMPERATURE=0.1
-LLM_MAX_TOKENS=200
+
+# Multi-Agent Models (optional, defaults to deepseek)
+SECURITY_AGENT_MODEL=deepseek/deepseek-chat   # or anthropic/claude-3-haiku
+PARSER_AGENT_MODEL=deepseek/deepseek-chat     # or openai/gpt-4o-mini
 
 # Authentication
 JWT_SECRET=your-32-character-secret-here

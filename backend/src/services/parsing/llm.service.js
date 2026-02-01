@@ -2,6 +2,34 @@ const { openai } = require('../../config/openai');
 const { FEW_SHOT_EXAMPLES } = require('../../constants/fewShotExamples');
 const { getPromptConfig } = require('../config/prompts.service');
 
+// Only these filter fields are valid (exist in DB)
+const VALID_FILTER_FIELDS = new Set([
+  'mark_name',
+  'folder_name',
+  'body_type',
+  'engine_volume_min',
+  'engine_volume_max',
+  'engine_type',
+  'min_hp',
+  'max_hp',
+  'transmission',
+  'drive_type',
+  'year_from',
+  'year_to',
+  'price_min',
+  'price_max'
+]);
+
+function sanitizeFilters(filters) {
+  const sanitized = {};
+  for (const [key, value] of Object.entries(filters)) {
+    if (VALID_FILTER_FIELDS.has(key) && value !== null && value !== undefined && value !== '') {
+      sanitized[key] = value;
+    }
+  }
+  return sanitized;
+}
+
 async function llmParse(query) {
   const promptConfig = getPromptConfig();
 
@@ -25,11 +53,18 @@ async function llmParse(query) {
   });
 
   const content = response.choices[0].message.content;
-  const filters = JSON.parse(content);
+  const rawFilters = JSON.parse(content);
+  const filters = sanitizeFilters(rawFilters);
 
   const inputTokens = response.usage?.prompt_tokens || 0;
   const outputTokens = response.usage?.completion_tokens || 0;
   const costUsd = (inputTokens * 0.00000014) + (outputTokens * 0.00000028);
+
+  // Log if LLM returned invalid fields
+  const invalidFields = Object.keys(rawFilters).filter(k => !VALID_FILTER_FIELDS.has(k));
+  if (invalidFields.length > 0) {
+    console.log(`LLM returned invalid fields (ignored): ${invalidFields.join(', ')}`);
+  }
 
   return {
     filters: Object.keys(filters).length > 0 ? filters : null,
