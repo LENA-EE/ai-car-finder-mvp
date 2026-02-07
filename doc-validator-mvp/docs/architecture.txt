@@ -2192,3 +2192,80 @@ STATUS: 🟢 PRODUCTION READY
 DEPLOY COMMAND: git push origin main
 TIME TO LIVE: 2m15s
 
+
+13. Дополнительные фичи (реализовано сверх плана)
+
+🛡️ 13.1 MULTI-AGENT SYSTEM
+
+Реализована мультиагентная архитектура для повышения безопасности и качества парсинга:
+
+text
+Запрос пользователя
+         │
+         ▼
+┌─────────────────────────┐
+│  🛡️ Security Agent      │  ← Проверяет безопасность запроса
+│  - Prompt injection     │     (LLM + regex fallback)
+│  - Off-topic запросы    │
+│  - Toxic контент        │
+└───────────┬─────────────┘
+            │ safe ✓
+            ▼
+┌─────────────────────────┐
+│  🔍 Parser Agent        │  ← Извлекает JSON фильтры
+│  - Понимает сленг       │     (few-shot learning)
+│  - Валидация полей      │
+└───────────┬─────────────┘
+            │
+            ▼
+       Результаты
+
+Конфигурация агентов (backend/src/config/agents.js):
+javascript
+module.exports = {
+  security: {
+    enabled: true,
+    model: process.env.SECURITY_AGENT_MODEL || 'deepseek/deepseek-chat',
+  },
+  parser: {
+    model: process.env.PARSER_AGENT_MODEL || 'deepseek/deepseek-chat',
+  },
+};
+
+Security Agent возвращает:
+json
+{
+  "safe": true|false,
+  "category": "car_search|injection|off_topic|toxic",
+  "reason": "описание",
+  "method": "llm|regex"
+}
+
+📄 13.2 CSV UPLOAD (помимо XML)
+
+Добавлена поддержка загрузки каталога в формате CSV:
+
+csv
+mark_name,folder_name,body_type,engine_volume,hp,transmission,drive_type,engine_type,year,price
+BMW,X5,Внедорожник 5 дв.,3.0,249,AT,4WD,diesel,2019,4200000
+
+Endpoint: POST /api/v1/admin/catalog/upload
+Поддерживаемые форматы: XML (Auto.ru), CSV
+
+🔌 13.3 ГИБКИЙ ВЫБОР LLM (OpenRouter)
+
+Вместо фиксированного gpt-4o-mini реализована интеграция с OpenRouter,
+что позволяет использовать любую модель:
+
+bash
+# Примеры конфигурации через env:
+SECURITY_AGENT_MODEL=anthropic/claude-3-haiku
+PARSER_AGENT_MODEL=openai/gpt-4o-mini
+# или дефолт:
+PARSER_AGENT_MODEL=deepseek/deepseek-chat
+
+Преимущества:
+- Выбор модели под задачу (скорость vs качество vs цена)
+- Лёгкое переключение без изменения кода
+- Поддержка 100+ моделей через единый API
+
