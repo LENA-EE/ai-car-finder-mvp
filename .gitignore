@@ -55,3 +55,4 @@ postgres-data/
 # Prisma
 prisma/migrations/*
 !prisma/migrations/.gitkeep
+nul
