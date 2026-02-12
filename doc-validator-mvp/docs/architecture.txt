@@ -2269,3 +2269,145 @@ PARSER_AGENT_MODEL=deepseek/deepseek-chat
 - Лёгкое переключение без изменения кода
 - Поддержка 100+ моделей через единый API
 
+
+# 14. Дополнительные фичи (новые - 2026)
+
+## 🎨 14.1 POST-SEARCH FILTER CHIPS (Feature 002)
+
+**Implemented:** 2026-02-12 | **PR:** #2 | **Spec:** specs/002-post-search-filters/
+
+### Описание
+
+Динамические фильтры-уточнения для мгновенной фильтрации результатов поиска на клиенте без повторных запросов к LLM/бекенду. После выполнения поиска пользователь видит чипсы-фильтры, сгенерированные из реальных данных найденных автомобилей.
+
+### Функциональность
+
+**5 групп фильтров:**
+- Тип двигателя (дизель, бензин, гибрид, электро)
+- КПП (АКПП, МКПП, вариатор, робот)
+- Привод (передний, задний, полный)
+- Тип кузова (седан, внедорожник, универсал и т.д.)
+- Год выпуска (конкретные года из результатов)
+
+**Ключевые возможности:**
+- ✅ Мгновенная клиентская фильтрация (без API запросов)
+- ✅ Динамические счётчики на чипсах: "дизель (6)"
+- ✅ Faceted counts (счётчики учитывают другие активные фильтры)
+- ✅ Логика AND между группами, OR внутри группы
+- ✅ Disabled-чипсы для невозможных комбинаций (показываются с (0))
+- ✅ Auto-reset при новом поиске
+- ✅ Кнопка "Сбросить фильтры"
+- ✅ Null-значения всегда проходят фильтр
+- ✅ Совместимость с "Показать ещё" (pagination)
+
+### Архитектура
+
+**Frontend (FSD):**
+
+```
+frontend/src/features/search/
+├── model/
+│   └── useFilterChips.js      # Хук с логикой фильтрации (115 строк)
+│       ├── FILTER_GROUPS константа (5 групп)
+│       ├── activeFilters state (объект {groupKey: [values]})
+│       ├── toggleFilter(groupKey, value)
+│       ├── resetFilters()
+│       ├── filteredCars (useMemo - AND/OR логика)
+│       └── chipGroups (useMemo - faceted counts)
+│
+└── ui/
+    └── FilterChips.jsx        # UI компонент (43 строки)
+        ├── Render chip groups
+        ├── 3 состояния: inactive/active/disabled
+        └── Кнопка "Сбросить фильтры"
+```
+
+**Интеграция:**
+
+```javascript
+// pages/SearchPage/index.jsx
+const { chipGroups, filteredCars, toggleFilter, resetFilters } =
+  useFilterChips(result?.results || []);
+
+// Передаётся в CarResults.jsx
+<CarResults
+  chipGroups={chipGroups}
+  filteredCars={filteredCars}
+  onToggleFilter={toggleFilter}
+  onResetFilters={resetFilters}
+/>
+```
+
+### Технические детали
+
+**Логика фильтрации (useFilterChips.js):**
+
+```javascript
+// AND между группами, OR внутри группы
+filteredCars = cars.filter(car =>
+  activeGroupKeys.every(groupKey => {
+    const val = car[groupKey];
+    if (val == null || val === "") return true;  // FR-011
+    return activeFilters[groupKey].includes(String(val));
+  })
+);
+
+// Faceted counts (Decision 4)
+const baseForCounts = cars.filter(car =>
+  otherGroupKeys.every(gk => {
+    const val = car[gk];
+    if (val == null) return true;
+    return activeFilters[gk].includes(String(val));
+  })
+);
+```
+
+**UI состояния (Tailwind CSS v4):**
+
+```javascript
+// Inactive
+className: "bg-slate-700 text-slate-300 hover:bg-slate-600"
+
+// Active
+className: "bg-cyan-600 text-white"
+
+// Disabled (count = 0)
+className: "bg-slate-800 text-slate-600 cursor-not-allowed opacity-50"
+```
+
+### Performance
+
+- **Мгновенная фильтрация:** <16ms на 50 результатов (useMemo оптимизация)
+- **No backend calls:** чисто клиентская логика
+- **Lazy computation:** faceted counts пересчитываются только при изменении activeFilters
+
+### Edge Cases (обработаны)
+
+1. **Null values:** Авто с пустыми значениями полей всегда проходят фильтр (не скрываются)
+2. **Single value groups:** Группы с <=1 уникальным значением автоматически скрываются
+3. **Empty results:** Показывается сообщение "Нет авто по выбранным фильтрам"
+4. **Pagination:** Новые результаты при "Показать ещё" также фильтруются
+5. **New search:** Фильтры автоматически сбрасываются при новом поиске
+
+### Metrics (из spec.md)
+
+- **SC-001:** Фильтрация мгновенная (пользователь не замечает задержки) ✅
+- **SC-002:** Сужение результатов за 2-3 клика без повторного поиска ✅
+- **SC-003:** Корректное количество результатов или сообщение при 0 совпадений ✅
+- **SC-004:** Новый поиск всегда с чистого состояния фильтров ✅
+
+### Future Improvements (вне скоупа текущей фичи)
+
+- Фильтр по цене (range slider)
+- Сортировка результатов
+- Сохранение фильтров в localStorage
+- Анимации при фильтрации
+
+---
+
+**Документация фичи:**
+- Спецификация: `specs/002-post-search-filters/spec.md`
+- План реализации: `specs/002-post-search-filters/plan.md`
+- Задачи (9/9): `specs/002-post-search-filters/tasks.md`
+- Тестирование: `specs/002-post-search-filters/quickstart.md`
+

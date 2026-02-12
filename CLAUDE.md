@@ -6,6 +6,15 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 AI Car Finder MVP - a multi-agent LLM system for natural language car search. Users can query in Russian slang (e.g., "бумер x5 дизель до 5 млн") and get matching cars from a PostgreSQL catalog.
 
+### Key Features (2026)
+
+- **Multi-Agent Pipeline**: Security validation → LLM parsing → Database search
+- **Russian Slang Support**: Understands "бумер", "гелик", "тачка" via synonyms table
+- **Post-Search Filter Chips** (NEW): Dynamic client-side filters for instant result refinement
+  - 5 filter groups: engine, transmission, drive, body, year
+  - Faceted counts, AND/OR logic, disabled chips for impossible combinations
+  - No backend calls - instant filtering
+
 ## Build & Development Commands
 
 ### Backend (Node.js + Express)
