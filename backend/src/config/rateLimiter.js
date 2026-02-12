@@ -10,7 +10,6 @@ const userRateLimiter = rateLimit({
   },
   standardHeaders: true,
   legacyHeaders: false,
-  keyGenerator: (req) => req.ip || req.connection.remoteAddress
 });
 
 const adminRateLimiter = rateLimit({
@@ -23,7 +22,8 @@ const adminRateLimiter = rateLimit({
   },
   standardHeaders: true,
   legacyHeaders: false,
-  keyGenerator: (req) => req.user?.id || req.ip
+  keyGenerator: (req) => req.user?.id || req.ip,
+  validate: { keyGeneratorIpFallback: false },
 });
 
 const uploadRateLimiter = rateLimit({
@@ -36,7 +36,8 @@ const uploadRateLimiter = rateLimit({
   },
   standardHeaders: true,
   legacyHeaders: false,
-  keyGenerator: (req) => req.user?.id || req.ip
+  keyGenerator: (req) => req.user?.id || req.ip,
+  validate: { keyGeneratorIpFallback: false },
 });
 
 module.exports = { userRateLimiter, adminRateLimiter, uploadRateLimiter };

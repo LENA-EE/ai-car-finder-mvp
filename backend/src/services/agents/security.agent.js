@@ -143,6 +143,9 @@ const SECURITY_PROMPT = `Ты агент безопасности для авт�
 - "кроссовер до 2 млн"
 - "бумер дизель"
 - "тойота камри 2020"
+- "красная тачка" (тачка = машина, сленг)
+- "нужна тачка до 3 млн"
+- "ищу авто недорого"
 
 Отвечай ТОЛЬКО JSON:
 {"safe": true/false, "category": "safe|injection|off_topic|toxic", "reason": "краткое пояснение"}`;
@@ -188,13 +191,36 @@ async function validateQuery(query) {
       return regexValidate(query);
     }
 
-    // Log security events
-    if (!result.safe) {
-      console.log(`[SecurityAgent] LLM blocked: category=${result.category}, reason="${result.reason}", query="${query.substring(0, 50)}..."`);
+    // If LLM says safe, trust it
+    if (result.safe) {
+      return {
+        safe: true,
+        category: result.category || 'safe',
+        reason: result.reason || '',
+        method: 'llm',
+        model: agentsConfig.security.model
+      };
     }
 
+    // LLM says not safe — cross-validate with regex for non-injection categories
+    if (result.category !== 'injection') {
+      const regexCheck = regexValidate(query);
+      if (regexCheck.safe) {
+        console.log(`[SecurityAgent] LLM said ${result.category} but regex says safe, overriding: "${query.substring(0, 50)}"`);
+        return {
+          safe: true,
+          category: 'safe',
+          reason: `LLM ${result.category} overridden by regex validation`,
+          method: 'llm+regex',
+          model: agentsConfig.security.model
+        };
+      }
+    }
+
+    // Both LLM and regex agree: not safe
+    console.log(`[SecurityAgent] Blocked: category=${result.category}, reason="${result.reason}", query="${query.substring(0, 50)}..."`);
     return {
-      safe: result.safe ?? false,
+      safe: false,
       category: result.category || 'unknown',
       reason: result.reason || '',
       method: 'llm',

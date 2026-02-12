@@ -37,6 +37,7 @@ export function useSearch() {
       setResult(data);
       addToHistory(q);
       setHistory(getHistory());
+
       return true;
     } catch (err) {
       setError(`Ошибка соединения: ${err.message}`);

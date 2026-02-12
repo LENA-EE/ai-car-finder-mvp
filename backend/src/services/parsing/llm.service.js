@@ -21,6 +21,9 @@ const VALID_FILTER_FIELDS = new Set([
 ]);
 
 function sanitizeFilters(filters) {
+  if (!filters || typeof filters !== 'object' || Array.isArray(filters)) {
+    return {};
+  }
   const sanitized = {};
   for (const [key, value] of Object.entries(filters)) {
     if (VALID_FILTER_FIELDS.has(key) && value !== null && value !== undefined && value !== '') {
