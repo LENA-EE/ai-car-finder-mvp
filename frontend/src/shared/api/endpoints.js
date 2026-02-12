@@ -4,7 +4,6 @@ export const endpoints = {
   // Public
   parse: `${API_URL}/api/v1/parse`,
   car: (id) => `${API_URL}/api/v1/cars/${id}`,
-
   // Auth
   login: `${API_URL}/api/v1/admin/auth/login`,
 
