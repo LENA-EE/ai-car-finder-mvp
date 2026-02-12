@@ -1,4 +1,4 @@
-import { SearchBox, SearchHistory, CarResults, useSearch } from "@/features/search";
+import { SearchBox, SearchHistory, CarResults, useSearch, useFilterChips } from "@/features/search";
 import { CarModal } from "@/entities/car";
 
 export function SearchPage() {
@@ -17,6 +17,15 @@ export function SearchPage() {
     setShowHistory,
     clearHistory,
   } = useSearch();
+
+  const {
+    chipGroups,
+    filteredCars,
+    activeFilters,
+    toggleFilter,
+    resetFilters,
+    hasActiveFilters,
+  } = useFilterChips(result?.results || []);
 
   return (
     <>
@@ -41,9 +50,18 @@ export function SearchPage() {
         onCarClick={fetchCarDetails}
         onLoadMore={loadMore}
         loadingMore={loadingMore}
+        chipGroups={chipGroups}
+        activeFilters={activeFilters}
+        filteredCars={filteredCars}
+        onToggleFilter={toggleFilter}
+        onResetFilters={resetFilters}
+        hasActiveFilters={hasActiveFilters}
       />
 
-      <CarModal car={selectedCar} onClose={() => setSelectedCar(null)} />
+      <CarModal
+        car={selectedCar}
+        onClose={() => setSelectedCar(null)}
+      />
     </>
   );
 }
