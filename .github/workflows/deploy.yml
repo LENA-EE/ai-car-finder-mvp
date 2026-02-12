@@ -100,7 +100,7 @@ jobs:
           RAILWAY_PROJECT_ID: ${{ secrets.RAILWAY_PROJECT_ID }}
         run: |
           cd backend
-          railway up --service backend --detach
+          railway up --service "backend service" --detach
 
       - name: Deploy Frontend
         env:
@@ -108,7 +108,7 @@ jobs:
           RAILWAY_PROJECT_ID: ${{ secrets.RAILWAY_PROJECT_ID }}
         run: |
           cd frontend
-          railway up --service frontend --detach
+          railway up --service "frontend service" --detach
 
   # ========================================
   # GATE 4: Smoke Tests
