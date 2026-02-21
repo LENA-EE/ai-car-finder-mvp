@@ -2,10 +2,10 @@
  * VIN Checker Service
  *
  * Orchestrates VIN checks across multiple sources.
- * Full implementation in Phase 9.
  */
 
 const decoder = require('./decoder.service');
+const fnpService = require('./fnp.service');
 const vinRepo = require('../../repositories/vin.repository');
 const config = require('../../config');
 
@@ -43,10 +43,15 @@ async function checkVin(vin, sources = null) {
   }
 
   if (enabledSources.includes('fnp')) {
-    results.fnp = {
-      available: false,
-      message: 'ФНП проверка будет реализована в Phase 5',
-    };
+    try {
+      results.fnp = await fnpService.checkPledges(results.vin);
+    } catch (error) {
+      results.fnp = {
+        available: false,
+        error: error.message,
+        message: 'Ошибка проверки залогов ФНП',
+      };
+    }
   }
 
   if (enabledSources.includes('fssp')) {

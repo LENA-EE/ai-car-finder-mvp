@@ -5,25 +5,13 @@
  */
 
 const validator = require('./validator');
-
-// Decoder and checker will be added in Phase 3+
-let decoder = null;
-let checker = null;
-
-try {
-  decoder = require('./decoder.service');
-} catch (e) {
-  // Not implemented yet
-}
-
-try {
-  checker = require('./checker.service');
-} catch (e) {
-  // Not implemented yet
-}
+const decoder = require('./decoder.service');
+const checker = require('./checker.service');
+const fnp = require('./fnp.service');
 
 module.exports = {
   validator,
   decoder,
   checker,
+  fnp,
 };
