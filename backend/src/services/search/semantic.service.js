@@ -15,7 +15,7 @@ const { generateEmbedding, isAvailable: isEmbeddingsAvailable } = require('../em
  * @returns {Promise<{items: Array, total: number, queryType: string}>}
  */
 async function semanticSearch(query, options = {}) {
-  const { limit = 10, threshold = 0.3 } = options;
+  const { limit = 10, threshold = 0.2 } = options;
 
   if (!isEmbeddingsAvailable()) {
     console.warn('[SemanticSearch] Embeddings not available (no OPENAI_API_KEY)');
@@ -52,7 +52,7 @@ async function semanticSearch(query, options = {}) {
  * @param {Object} options - Search options
  */
 async function hybridSearch(query, filters, options = {}) {
-  const { limit = 10, threshold = 0.3 } = options;
+  const { limit = 10, threshold = 0.2 } = options;
 
   if (!isEmbeddingsAvailable()) {
     console.warn('[HybridSearch] Embeddings not available, falling back to filters only');
