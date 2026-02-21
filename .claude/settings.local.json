@@ -22,7 +22,14 @@
       "Bash(taskkill:*)",
       "Bash(npm run dev:*)",
       "Bash(npm run build:*)",
-      "Bash(git push:*)"
+      "Bash(git push:*)",
+      "Bash(git add:*)",
+      "Bash(git commit:*)",
+      "Bash(cat:*)",
+      "Bash(fly version:*)",
+      "Bash(flyctl version:*)",
+      "Bash(powershell -Command \"iwr https://fly.io/install.ps1 -useb | iex\")",
+      "Bash(echo === Test 6: Generate Embeddings \\(should fail without OPENAI_API_KEY\\) ===:*)"
     ]
   }
 }

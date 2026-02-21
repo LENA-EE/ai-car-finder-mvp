@@ -165,12 +165,11 @@ Neon PostgreSQL 16 with pgvector extension. Key tables:
 Required:
 
 - `DATABASE_URL`: Neon PostgreSQL connection string
-- `OPENROUTER_API_KEY`: LLM API access (DeepSeek via OpenRouter)
+- `OPENROUTER_API_KEY`: LLM API access (DeepSeek + OpenAI embeddings via OpenRouter)
 - `JWT_SECRET`: Auth token signing (32+ chars)
 
 Optional:
 
-- `OPENAI_API_KEY`: OpenAI API for embeddings (semantic search)
 - `SECURITY_AGENT_MODEL`, `CLASSIFIER_AGENT_MODEL`, `PARSER_AGENT_MODEL`: Override default `deepseek/deepseek-chat`
 - `RATE_LIMIT_USER`, `RATE_LIMIT_ADMIN`: Custom rate limits
 

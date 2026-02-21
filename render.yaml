@@ -17,9 +17,7 @@ services:
       - key: JWT_SECRET
         generateValue: true
       - key: OPENROUTER_API_KEY
-        sync: false  # Set manually in dashboard
-      - key: OPENAI_API_KEY
-        sync: false  # For embeddings (semantic search)
+        sync: false  # Set manually in dashboard (also used for embeddings)
       - key: LLM_TEMPERATURE
         value: "0.1"
       - key: LLM_MAX_TOKENS

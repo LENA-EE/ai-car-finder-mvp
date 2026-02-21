@@ -1,29 +1,32 @@
 /**
  * Embeddings Service
  *
- * Uses OpenAI text-embedding-3-small (1536 dimensions)
+ * Uses OpenAI text-embedding-3-small (1536 dimensions) via OpenRouter
  * for generating vector embeddings for semantic search.
  *
- * Note: Uses OPENAI_API_KEY (direct OpenAI), not OPENROUTER_API_KEY
+ * Uses the same OPENROUTER_API_KEY as other agents.
  */
 
 const OpenAI = require('openai');
 
-const EMBEDDING_MODEL = 'text-embedding-3-small';
+const EMBEDDING_MODEL = 'openai/text-embedding-3-small';
 const EMBEDDING_DIMENSIONS = 1536;
 
-// OpenAI client for embeddings (direct API, not OpenRouter)
-let openaiClient = null;
+// OpenRouter client for embeddings
+let openrouterClient = null;
 
-function getOpenAIClient() {
-  if (!openaiClient) {
-    const apiKey = process.env.OPENAI_API_KEY;
+function getOpenRouterClient() {
+  if (!openrouterClient) {
+    const apiKey = process.env.OPENROUTER_API_KEY;
     if (!apiKey) {
-      throw new Error('OPENAI_API_KEY is not set');
+      throw new Error('OPENROUTER_API_KEY is not set');
     }
-    openaiClient = new OpenAI({ apiKey });
+    openrouterClient = new OpenAI({
+      apiKey,
+      baseURL: 'https://openrouter.ai/api/v1',
+    });
   }
-  return openaiClient;
+  return openrouterClient;
 }
 
 /**
@@ -36,7 +39,7 @@ async function generateEmbedding(text) {
     throw new Error('Text is required for embedding generation');
   }
 
-  const client = getOpenAIClient();
+  const client = getOpenRouterClient();
 
   const response = await client.embeddings.create({
     model: EMBEDDING_MODEL,
@@ -66,9 +69,9 @@ async function generateEmbeddingsBatch(texts) {
     throw new Error('No valid texts provided');
   }
 
-  const client = getOpenAIClient();
+  const client = getOpenRouterClient();
 
-  // OpenAI batch limit is 2048 texts per request
+  // OpenRouter batch limit (same as OpenAI: 2048 texts per request)
   const BATCH_SIZE = 2048;
   const allEmbeddings = [];
   let totalTokens = 0;
@@ -106,7 +109,7 @@ function estimateCost(tokens) {
  * Check if embeddings are available
  */
 function isAvailable() {
-  return !!process.env.OPENAI_API_KEY;
+  return !!process.env.OPENROUTER_API_KEY;
 }
 
 module.exports = {

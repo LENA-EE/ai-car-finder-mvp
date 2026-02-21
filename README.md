@@ -209,6 +209,35 @@ RATE_LIMIT_USER=100
 RATE_LIMIT_ADMIN=50
 ```
 
+## Deployment to Render (Free Tier)
+
+### Production URLs
+
+| Service  | URL                                              |
+| -------- | ------------------------------------------------ |
+| Frontend | https://ai-car-finder-mvp.onrender.com           |
+| Backend  | https://ai-car-finder-backend.onrender.com       |
+| Health   | https://ai-car-finder-backend.onrender.com/health |
+
+### ⚠️ Пробуждение Backend (Free Tier)
+
+На бесплатном тарифе Render backend **засыпает после 15 минут** неактивности.
+
+**Перед использованием открой в браузере:**
+```
+https://ai-car-finder-backend.onrender.com/health
+```
+
+Подожди ~30 сек пока появится `{"status":"healthy"...}` — backend проснулся, можно работать.
+
+### Логин в админку
+
+- URL: https://ai-car-finder-mvp.onrender.com/admin
+- **Email**: admin@ai-car-finder.app
+- **Пароль**: admin123
+
+---
+
 ## Deployment to Fly.io
 
 ### Prerequisites

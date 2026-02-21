@@ -43,9 +43,9 @@ module.exports = {
     max_tokens: 300,
   },
 
-  // Embeddings Configuration
+  // Embeddings Configuration (via OpenRouter)
   embeddings: {
-    model: 'text-embedding-3-small',  // OpenAI model (not OpenRouter)
+    model: 'openai/text-embedding-3-small',  // Via OpenRouter
     dimensions: 1536,
     batchSize: 100,  // Cars per batch for embedding generation
   },
