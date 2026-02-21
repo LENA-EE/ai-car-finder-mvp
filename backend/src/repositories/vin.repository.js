@@ -56,11 +56,25 @@ async function saveCheck(vin, result, status = 'ok', ttlSeconds = 86400) {
  * @returns {Promise<Object|null>}
  */
 async function getWmiData(wmi) {
-  const result = await pool.query(`
+  const upperWmi = wmi.toUpperCase();
+
+  // Try exact 3-char match first
+  let result = await pool.query(`
     SELECT wmi, manufacturer, country, region
     FROM vin_wmi
     WHERE wmi = $1
-  `, [wmi.toUpperCase()]);
+  `, [upperWmi]);
+
+  if (result.rows[0]) {
+    return result.rows[0];
+  }
+
+  // Fallback to 2-char prefix (many WMI entries use 2 chars)
+  result = await pool.query(`
+    SELECT wmi, manufacturer, country, region
+    FROM vin_wmi
+    WHERE wmi = $1
+  `, [upperWmi.substring(0, 2)]);
 
   return result.rows[0] || null;
 }
