@@ -32,7 +32,6 @@ services:
   - type: web
     name: ai-car-finder-frontend
     runtime: static
-    region: frankfurt
     rootDir: frontend
     buildCommand: npm ci && npm run build
     staticPublishPath: dist
