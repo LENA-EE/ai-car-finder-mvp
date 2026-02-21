@@ -1,0 +1,276 @@
+openapi: 3.0.3
+info:
+  title: VIN Decoder API
+  version: 1.0.0
+  description: API для проверки автомобилей по VIN номеру
+
+servers:
+  - url: /api/v1
+    description: Production
+
+paths:
+  /vin/decode:
+    post:
+      summary: Расшифровать VIN
+      description: Возвращает информацию о производителе, модели и годе выпуска
+      tags: [VIN]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [vin]
+              properties:
+                vin:
+                  type: string
+                  minLength: 17
+                  maxLength: 17
+                  example: "WBAPH5C55BA123456"
+      responses:
+        '200':
+          description: Успешная расшифровка
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/VinDecodeResponse'
+        '400':
+          description: Невалидный VIN
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+  /vin/check:
+    post:
+      summary: Полная проверка VIN
+      description: Расшифровка + проверка по ГИБДД, ФНП, ФССП
+      tags: [VIN]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [vin]
+              properties:
+                vin:
+                  type: string
+                  minLength: 17
+                  maxLength: 17
+                sources:
+                  type: array
+                  items:
+                    type: string
+                    enum: [gibdd, fnp, fssp]
+                  default: [gibdd, fnp, fssp]
+                  description: Источники для проверки
+      responses:
+        '200':
+          description: Результат проверки
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/VinCheckResponse'
+        '400':
+          description: Невалидный VIN
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+  /vin/check/{vin}:
+    get:
+      summary: Получить результат проверки из кэша
+      tags: [VIN]
+      parameters:
+        - name: vin
+          in: path
+          required: true
+          schema:
+            type: string
+            minLength: 17
+            maxLength: 17
+      responses:
+        '200':
+          description: Результат из кэша
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/VinCheckResponse'
+        '404':
+          description: Проверка не найдена
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+components:
+  schemas:
+    VinDecodeResponse:
+      type: object
+      properties:
+        success:
+          type: boolean
+        vin:
+          type: string
+        valid:
+          type: boolean
+        decode:
+          $ref: '#/components/schemas/VinDecode'
+        error:
+          type: string
+
+    VinDecode:
+      type: object
+      properties:
+        region:
+          type: string
+          example: "Europe"
+        country:
+          type: string
+          example: "Germany"
+        manufacturer:
+          type: string
+          example: "BMW AG"
+        brand:
+          type: string
+          example: "BMW"
+        year:
+          type: integer
+          example: 2011
+        plant:
+          type: string
+          example: "Dingolfing"
+
+    VinCheckResponse:
+      type: object
+      properties:
+        success:
+          type: boolean
+        vin:
+          type: string
+        status:
+          type: string
+          enum: [ok, warning, danger]
+        checkedAt:
+          type: string
+          format: date-time
+        cached:
+          type: boolean
+        decode:
+          $ref: '#/components/schemas/VinDecode'
+        gibdd:
+          $ref: '#/components/schemas/GibddResult'
+        fnp:
+          $ref: '#/components/schemas/FnpResult'
+        fssp:
+          $ref: '#/components/schemas/FsspResult'
+        summary:
+          type: string
+          description: Человекочитаемое резюме проверки
+
+    GibddResult:
+      type: object
+      properties:
+        available:
+          type: boolean
+        ownersCount:
+          type: integer
+        accidentsCount:
+          type: integer
+        wanted:
+          type: boolean
+        restrictionsCount:
+          type: integer
+        owners:
+          type: array
+          items:
+            $ref: '#/components/schemas/OwnerRecord'
+        accidents:
+          type: array
+          items:
+            $ref: '#/components/schemas/AccidentRecord'
+
+    OwnerRecord:
+      type: object
+      properties:
+        from:
+          type: string
+          format: date
+        to:
+          type: string
+          format: date
+          nullable: true
+        region:
+          type: string
+        type:
+          type: string
+          enum: [person, company]
+
+    AccidentRecord:
+      type: object
+      properties:
+        date:
+          type: string
+          format: date
+        region:
+          type: string
+        damage:
+          type: array
+          items:
+            type: string
+
+    FnpResult:
+      type: object
+      properties:
+        available:
+          type: boolean
+        pledgesCount:
+          type: integer
+        pledges:
+          type: array
+          items:
+            $ref: '#/components/schemas/PledgeRecord'
+
+    PledgeRecord:
+      type: object
+      properties:
+        pledgor:
+          type: string
+        date:
+          type: string
+          format: date
+        number:
+          type: string
+
+    FsspResult:
+      type: object
+      properties:
+        available:
+          type: boolean
+        enforcementsCount:
+          type: integer
+        enforcements:
+          type: array
+          items:
+            $ref: '#/components/schemas/EnforcementRecord'
+
+    EnforcementRecord:
+      type: object
+      properties:
+        number:
+          type: string
+        date:
+          type: string
+          format: date
+        subject:
+          type: string
+
+    Error:
+      type: object
+      properties:
+        error:
+          type: string
+        details:
+          type: string
