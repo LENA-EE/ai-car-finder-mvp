@@ -1,0 +1,30 @@
+app = "ai-car-finder-backend"
+primary_region = "ams"
+
+[build]
+  dockerfile = "Dockerfile"
+
+[env]
+  PORT = "3000"
+  NODE_ENV = "production"
+  LLM_TEMPERATURE = "0.1"
+  LLM_MAX_TOKENS = "200"
+  RATE_LIMIT_USER = "100"
+  RATE_LIMIT_ADMIN = "50"
+
+[http_service]
+  internal_port = 3000
+  force_https = true
+  auto_stop_machines = false
+  auto_start_machines = true
+  min_machines_running = 1
+
+[[http_service.checks]]
+  interval = "30s"
+  timeout = "5s"
+  path = "/health"
+  method = "GET"
+
+[[vm]]
+  size = "shared-cpu-1x"
+  memory = "256mb"

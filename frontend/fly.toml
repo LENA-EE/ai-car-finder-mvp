@@ -1,0 +1,21 @@
+app = "ai-car-finder-frontend"
+primary_region = "ams"
+
+[build]
+  dockerfile = "Dockerfile"
+  [build.args]
+    VITE_API_URL = "https://ai-car-finder-backend.fly.dev"
+
+[env]
+  NODE_ENV = "production"
+
+[http_service]
+  internal_port = 3001
+  force_https = true
+  auto_stop_machines = false
+  auto_start_machines = true
+  min_machines_running = 1
+
+[[vm]]
+  size = "shared-cpu-1x"
+  memory = "256mb"
