@@ -6,6 +6,7 @@
  *
  * To switch to different models later:
  * - Security Agent: 'anthropic/claude-3-haiku' (fast, cheap)
+ * - Classifier Agent: 'anthropic/claude-3-haiku' (fast classification)
  * - Parser Agent: 'openai/gpt-4o-mini' or 'anthropic/claude-3-sonnet'
  * - Response Agent: 'anthropic/claude-3-haiku' (fast responses)
  */
@@ -16,6 +17,14 @@ module.exports = {
     enabled: true,
     model: process.env.SECURITY_AGENT_MODEL || 'deepseek/deepseek-chat',
     temperature: 0.0,  // Deterministic for security
+    max_tokens: 100,   // Short responses only
+  },
+
+  // Classifier Agent - determines query type (filters/semantic/hybrid)
+  classifier: {
+    enabled: true,
+    model: process.env.CLASSIFIER_AGENT_MODEL || 'deepseek/deepseek-chat',
+    temperature: 0.0,  // Deterministic classification
     max_tokens: 100,   // Short responses only
   },
 
@@ -32,5 +41,12 @@ module.exports = {
     model: process.env.RESPONSE_AGENT_MODEL || 'deepseek/deepseek-chat',
     temperature: 0.7,  // More creative
     max_tokens: 300,
+  },
+
+  // Embeddings Configuration
+  embeddings: {
+    model: 'text-embedding-3-small',  // OpenAI model (not OpenRouter)
+    dimensions: 1536,
+    batchSize: 100,  // Cars per batch for embedding generation
   },
 };

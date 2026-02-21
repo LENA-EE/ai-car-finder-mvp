@@ -1,6 +1,8 @@
 const { parse: csvParse } = require('csv-parse/sync');
 const { parseAutoRuXml } = require('./xmlParser.service');
 const carsRepo = require('../../repositories/cars.repository');
+const { generateEmbeddingsBatch, isAvailable: isEmbeddingsAvailable, estimateCost } = require('../embeddings/embeddings.service');
+const { buildCarTexts } = require('../embeddings/carTextBuilder');
 
 async function uploadCatalog(file) {
   const filename = file.originalname.toLowerCase();
@@ -106,7 +108,69 @@ async function clearCatalog() {
   return carsRepo.clearCatalog();
 }
 
+/**
+ * Generate embeddings for cars that don't have them
+ * @param {number} batchSize - Number of cars to process per batch
+ * @returns {Promise<{processed: number, totalTokens: number, costUsd: number}>}
+ */
+async function generateEmbeddingsForNewCars(batchSize = 100) {
+  if (!isEmbeddingsAvailable()) {
+    throw { code: 'EMBEDDINGS_UNAVAILABLE', message: 'OPENAI_API_KEY is not set' };
+  }
+
+  let totalProcessed = 0;
+  let totalTokens = 0;
+
+  while (true) {
+    // Get batch of cars without embeddings
+    const cars = await carsRepo.getCarsWithoutEmbeddings(batchSize);
+
+    if (cars.length === 0) {
+      break;
+    }
+
+    console.log(`[Embeddings] Processing batch of ${cars.length} cars...`);
+
+    // Build text descriptions
+    const carTexts = buildCarTexts(cars);
+
+    // Generate embeddings
+    const { embeddings, tokens } = await generateEmbeddingsBatch(carTexts.map(ct => ct.text));
+
+    // Update cars with embeddings
+    const updates = carTexts.map((ct, i) => ({
+      id: ct.id,
+      embedding: embeddings[i],
+    }));
+
+    await carsRepo.batchUpdateEmbeddings(updates);
+
+    totalProcessed += cars.length;
+    totalTokens += tokens;
+
+    console.log(`[Embeddings] Processed ${totalProcessed} cars (${tokens} tokens this batch)`);
+
+    // Small delay to avoid rate limits
+    await new Promise(resolve => setTimeout(resolve, 100));
+  }
+
+  return {
+    processed: totalProcessed,
+    totalTokens,
+    costUsd: estimateCost(totalTokens),
+  };
+}
+
+/**
+ * Get embedding statistics
+ */
+async function getEmbeddingStats() {
+  return carsRepo.getEmbeddingStats();
+}
+
 module.exports = {
   uploadCatalog,
   clearCatalog,
+  generateEmbeddingsForNewCars,
+  getEmbeddingStats,
 };

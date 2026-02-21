@@ -1,4 +1,4 @@
-const { uploadCatalog, clearCatalog } = require('../services/catalog/upload.service');
+const { uploadCatalog, clearCatalog, generateEmbeddingsForNewCars, getEmbeddingStats } = require('../services/catalog/upload.service');
 const { logAdminAction } = require('../repositories/audit.repository');
 
 async function upload(req, res) {
@@ -56,4 +56,59 @@ async function clear(req, res) {
   }
 }
 
-module.exports = { upload, clear };
+/**
+ * Generate embeddings for cars without them
+ * POST /api/v1/admin/catalog/embeddings
+ */
+async function generateEmbeddings(req, res) {
+  const startTime = Date.now();
+  const batchSize = parseInt(req.body.batchSize) || 100;
+
+  try {
+    const result = await generateEmbeddingsForNewCars(batchSize);
+    const duration = Date.now() - startTime;
+
+    await logAdminAction(req.user.id, req.user.email, 'generate_embeddings', {
+      processed: result.processed,
+      tokens: result.totalTokens,
+      cost_usd: result.costUsd,
+      duration_ms: duration
+    }, req);
+
+    res.json({
+      success: true,
+      processed: result.processed,
+      totalTokens: result.totalTokens,
+      costUsd: result.costUsd,
+      duration_ms: duration
+    });
+  } catch (err) {
+    if (err.code) {
+      return res.status(400).json({ error: err.code, details: err.message });
+    }
+    console.error('Generate embeddings error:', err.message);
+    res.status(500).json({ error: 'EMBEDDINGS_ERROR', details: err.message });
+  }
+}
+
+/**
+ * Get embedding statistics
+ * GET /api/v1/admin/catalog/embeddings/stats
+ */
+async function embeddingStats(req, res) {
+  try {
+    const stats = await getEmbeddingStats();
+    res.json({
+      success: true,
+      ...stats,
+      coverage: stats.totalCars > 0
+        ? ((stats.withEmbeddings / stats.totalCars) * 100).toFixed(1) + '%'
+        : '0%'
+    });
+  } catch (err) {
+    console.error('Embedding stats error:', err.message);
+    res.status(500).json({ error: 'DB_ERROR', details: err.message });
+  }
+}
+
+module.exports = { upload, clear, generateEmbeddings, embeddingStats };
