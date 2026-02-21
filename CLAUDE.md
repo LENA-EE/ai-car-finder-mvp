@@ -10,10 +10,18 @@ AI Car Finder MVP - a multi-agent LLM system for natural language car search. Us
 
 - **Multi-Agent Pipeline**: Security validation → LLM parsing → Database search
 - **Russian Slang Support**: Understands "бумер", "гелик", "тачка" via synonyms table
-- **Post-Search Filter Chips** (NEW): Dynamic client-side filters for instant result refinement
+- **Post-Search Filter Chips**: Dynamic client-side filters for instant result refinement
   - 5 filter groups: engine, transmission, drive, body, year
   - Faceted counts, AND/OR logic, disabled chips for impossible combinations
   - No backend calls - instant filtering
+
+### Deployment
+
+- **Hosting**: Fly.io (free tier)
+- **Backend**: `ai-car-finder-backend.fly.dev`
+- **Frontend**: `ai-car-finder-frontend.fly.dev`
+- **Database**: Fly Postgres with pgvector support (planned)
+- **Config files**: `backend/fly.toml`, `frontend/fly.toml`
 
 ## Build & Development Commands
 
@@ -41,6 +49,15 @@ npm run lint      # ESLint
 ```bash
 docker-compose up --build      # Start all services
 docker-compose down            # Stop all
+```
+
+### Fly.io Deployment
+
+```bash
+cd backend && fly deploy       # Deploy backend
+cd frontend && fly deploy      # Deploy frontend
+fly logs -a ai-car-finder-backend  # View logs
+fly postgres connect -a ai-car-finder-db  # DB console
 ```
 
 ### Testing
