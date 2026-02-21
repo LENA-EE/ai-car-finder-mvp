@@ -84,7 +84,7 @@ LLM стоимость	<$0.0001/запрос	gpt-4o-mini
 Общие затраты:
 text
 LLM: $5/мес (10К запросов)
-Хостинг: $20/мес (Railway/DO)
+Хостинг: $0/мес (Fly.io free tier)
 База: $10/мес (10GB)
 ИТОГО: $35/мес
 🏗 Архитектура (Production Ready)
@@ -145,7 +145,7 @@ text
 ✅  JWT + роли (admin/viewer)
 ✅  Логирование 100% действий
 ✅  P95 < 2s, стоимость <$0.0001/запрос
-✅  Деплой: Railway/Двухклик
+✅  Деплой: Fly.io (fly deploy)
 ⏱ Оценка сроков разработки
 
 Этап	Ответственный	Сроки	Метрика
@@ -154,7 +154,7 @@ Backend API	1 Backend	5 дней	12 endpoints
 Frontend User	1 Frontend	4 дня	Чат + JSON
 Frontend Admin	1 Frontend	6 дней	5 страниц
 Аутентификация	1 Backend	2 дня	JWT + роли
-Деплой + тесты	1 DevOps	2 дня	Railway
+Деплой + тесты	1 DevOps	2 дня	Fly.io
 Итого	2 разработчика	21 день	$3,500
 
 
@@ -523,9 +523,9 @@ Retention: 30 дней (1GB max)
 📦 4.9 Deployment
 MVP Hosting
 text
-Railway/DigitalOcean App Platform: $20/мес
-1 vCPU, 2GB RAM, 50GB SSD
-Auto-scaling: 1-4 instances
+Fly.io (free tier)
+Shared CPU, 256MB RAM, 1GB storage
+Auto-scaling: 1-3 machines
 Zero-downtime deploys
 Environment Variables
 bash
@@ -555,7 +555,7 @@ text
 ✅ Security: JWT + Rate limit + Audit
 ✅ Usability: WCAG AA, Mobile-first
 ✅ Observability: Prometheus + Alerts
-✅ Deployment: Railway 2-click
+✅ Deployment: Fly.io (fly deploy)
 📊 DevOps: 0 вопросов для деплоя
 ⏱️ Load testing: Artillery scripts ready
 🎯 SLA: Измеримо и достижимо
@@ -585,7 +585,7 @@ class App system
 📦 5.2 LEVEL 2: CONTAINERS
 text
 graph TB
-subgraph "ai-car-finder.app (Railway)"
+subgraph "ai-car-finder.app (Fly.io)"
 subgraph Frontend"📱 React SPA"
 UserChatUser Chat
 AdminPanelAdmin Panel
@@ -656,7 +656,7 @@ ORM	Prisma 5	TypeScript схемы, миграции
 LLM	OpenAI gpt-4o-mini	4.8🔸/запрос, 97% accuracy
 База	PostgreSQL 16 (Neon)	JSONB + Fulltext, serverless
 Auth	JWT + bcrypt	Stateless, простая ролевая модель
-Deploy	Railway	2-click, $20/мес, auto-scale
+Deploy	Fly.io	fly deploy, free tier, auto-scale
 
 📊 5.5 DATA FLOW (Детальный)
 text
@@ -676,14 +676,14 @@ API->>F: {filters, results: 2 cars}
 F->>U: ТОП-2 + JSON
 🐳 5.6 DEPLOYMENT DIAGRAM
 text
-Railway ($20/мес)
-├── 1x Node.js (512MB RAM)
-│ ├── api:3000 (HTTPS)
-│ └── ws:3001 (WebSocket)
-├── 1x Postgres (10GB)
+Fly.io (free tier)
+├── 1x Node.js Backend (256MB RAM)
+│ └── api:3000 (HTTPS)
+├── 1x React Frontend (256MB RAM)
+│ └── static:3001 (HTTPS)
+├── Fly Postgres (1GB, pgvector ready)
 │ ├── cars_catalog (50К)
 │ └── parsing_logs
-├── Static Files (Vite)
 └── Healthchecks (/health)
 🔌 5.7 EXTERNAL INTEGRATIONS
 
@@ -714,12 +714,12 @@ text
 ✅ L1: System Context (1 диаграмма)
 ✅ L2: Containers (5 контейнеров)
 ✅ L3: Components (12 компонентов)
-✅ Tech Stack: Railway + Node + React + Prisma
+✅ Tech Stack: Fly.io + Node + React + Prisma
 ✅ Data Flow: User → API → LLM → DB → Results
-✅ Deployment: $20/мес, 2-click
+✅ Deployment: free tier, fly deploy
 🎨 Structurizr/PlantUML ready
 👨‍💻 Backend: 0 архитектурных вопросов
-🚀 DevOps: Railway playbook готов
+🚀 DevOps: Fly.io playbook готов
 
 
 
@@ -1771,9 +1771,9 @@ text
 🚨 Alerts: Alertmanager → Slack/PagerDuty
 🔍 Tracing: OpenTelemetry (critical paths)
 📝 Logs: Bunyan JSON → ClickHouse
-MVP Alternative (Railway):
-├── Railway Logs (structured JSON)
-├── Railway Metrics (Prometheus)
+MVP Alternative (Fly.io):
+├── Fly.io Logs (structured JSON)
+├── Fly.io Metrics (Prometheus)
 └── Slack alerts (webhooks)
 📋 10.8 RUNBOOKS (Автоматические)
 Parse Accuracy <80%
@@ -1784,7 +1784,7 @@ text
 ✅ Fallback: Keyword parser only
 P95 >2s
 text
-✅ Scale Railway instances (1→4)
+✅ Scale Fly.io machines (fly scale count 4)
 ✅ Cache identical queries (Redis TTL 5min)
 ✅ LLM fallback → Ollama local
 ✅ DB connection pool +1
@@ -1816,28 +1816,28 @@ text
 📋 2 runbooks (accuracy/latency)
 📉 SLA/SLO defined (85% parse, P95 2s)
 🎯 DevOps: 0 setup questions
-⚡ Railway: Native support (logs + metrics)
+⚡ Fly.io: Native support (logs + metrics)
 🚀 SLO monitoring: Production-ready
 
 
 
 
 11. Deployment
-☁️ 11.1 INFRASTRUCTURE OVERVIEW (Railway)
+☁️ 11.1 INFRASTRUCTURE OVERVIEW (Fly.io)
 text
-Railway.app ($20/мес) — 2-click deployment
-├── 🖥️ 1x Node.js API (512MB RAM, 1 vCPU)
-├── 🗄️ 1x Postgres (10GB, Neon integration)
-├── 📱 Static Frontend (Vite build)
-├── 🔒 Cloudflare (SSL + DDoS)
+Fly.io (free tier) — fly deploy
+├── 🖥️ 1x Node.js Backend (256MB RAM, shared CPU)
+├── 📱 1x React Frontend (256MB RAM, shared CPU)
+├── 🗄️ Fly Postgres (1GB, pgvector ready)
+├── 🔒 Automatic SSL (Let's Encrypt)
 └── 📊 Built-in Logs + Metrics
-Why Railway?
+Why Fly.io?
 
-Feature	Railway	Heroku	Vercel
-Price	$20/мес	$50+	Frontend only
-Postgres	✅ 1-click	✅ $9	❌ No
+Feature	Fly.io	Railway	Vercel
+Price	Free tier	$20/мес	Frontend only
+Postgres	✅ 1GB free	✅ $10	❌ No
+pgvector	✅ Supported	❌ No	❌ No
 WebSocket	✅ Native	✅	❌
-File Upload	✅ 50MB	✅	❌
 Custom Domain	✅ Free	✅	✅
 
 🐳 11.2 CONTAINERIZATION (Docker)
@@ -1865,7 +1865,7 @@ EXPOSE 80
 🚀 11.3 CI/CD PIPELINE (GitHub Actions)
 text
 .github/workflows/deploy.yml
-name: Deploy to Railway
+name: Deploy to Fly.io
 on:
 push:
 branches: main
@@ -1885,12 +1885,17 @@ run: |
 npm ci
 npm test
 npm run build
-name: Deploy to Railway
-uses: railwayapp/action@v1
-with:
-railwayToken: ${{ secrets.RAILWAY_TOKEN }}
-serviceId: ${{ secrets.RAILWAY_SERVICE_ID }}
-watchForChanges: true # Auto-deploy
+name: Deploy Backend to Fly.io
+uses: superfly/flyctl-actions/setup-flyctl@master
+run: |
+cd backend && flyctl deploy --remote-only
+env:
+FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN }}
+name: Deploy Frontend to Fly.io
+run: |
+cd frontend && flyctl deploy --remote-only
+env:
+FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN }}
 🌍 11.4 ENVIRONMENTS
 
 Environment	Purpose	Config
@@ -1899,41 +1904,48 @@ Staging	QA testing	Copy of prod DB (read-only)
 Preview	PR reviews	Auto-created per PR
 
 text
-railway env set --service api DATABASE_URL postgres://...
-railway env set --service api OPENAI_API_KEY sk-...
-railway env:set NODE_ENV production
+fly secrets set DATABASE_URL=postgres://... -a ai-car-finder-backend
+fly secrets set OPENROUTER_API_KEY=sk-or-... -a ai-car-finder-backend
+fly secrets set NODE_ENV=production -a ai-car-finder-backend
 📦 11.5 DEPLOYMENT COMMANDS
 bash
-# 1. Connect GitHub repo
-railway login
-railway link
-# 2. Add Postgres (1-click)
-railway add postgres
-# 3. Run migrations
-railway run npx prisma db push
-# 4. Deploy (auto-triggered)
-git push origin main
-# 5. Generate domain
-railway domain add ai-car-finder.app
-🔧 11.6 CONFIGURATION (Railway Native)
-Environment Variables UI
+# 1. Install Fly CLI & Login
+fly auth login
+# 2. Create Postgres (free tier 1GB)
+fly postgres create --name ai-car-finder-db --region ams
+# 3. Deploy Backend
+cd backend
+fly launch --no-deploy --name ai-car-finder-backend --region ams
+fly postgres attach ai-car-finder-db --app ai-car-finder-backend
+fly deploy
+# 4. Deploy Frontend
+cd frontend
+fly launch --no-deploy --name ai-car-finder-frontend --region ams
+fly deploy
+# 5. Custom domain (optional)
+fly certs add ai-car-finder.app -a ai-car-finder-frontend
+🔧 11.6 CONFIGURATION (Fly.io Native)
+Environment Variables (fly secrets)
 text
-DATABASE_URL=postgres://user:pass@containers-us-west-123.railway.app:5432/db
-OPENAI_API_KEY=sk-proj-abc123...
+DATABASE_URL=postgres://user:pass@ai-car-finder-db.flycast:5432/db
+OPENROUTER_API_KEY=sk-or-v1-...
 JWT_SECRET=32randombyteshere...
-FILE_UPLOAD_MAX_MB=50
 LLM_TEMPERATURE=0.1
 MAX_TOKENS=200
-Railway railway.toml
+Fly.io fly.toml (backend)
 text
-build
-builder = "nixpacks"
-deploy
-startCommand = "npm start"
-restartPolicyType = "ON_FAILURE"
-restartPolicyMaxRetries = 10
-services.api
-httpPort = 3000
+app = "ai-car-finder-backend"
+primary_region = "ams"
+
+[http_service]
+internal_port = 3000
+force_https = true
+auto_stop_machines = false
+min_machines_running = 1
+
+[[vm]]
+size = "shared-cpu-1x"
+memory = "256mb"
 📊 11.7 RUNTIME CONFIG
 Health Checks
 text
@@ -1950,28 +1962,28 @@ console.log('HTTP server closed');
 process.exit(0);
 });
 });
-🔄 11.8 ZERO-DOWNTIME DEploys
+🔄 11.8 ZERO-DOWNTIME DEPLOYS
 text
-Railway Blue-Green Deployment:
-Build new container (parallel)
+Fly.io Rolling Deployment:
+Build new machine (parallel)
 Health check → 200 OK (30s)
 Swap traffic (atomic)
-Old container → terminated
-Rollback → 1-click if failed
+Old machine → stopped
+Rollback: fly deploy --image <previous>
 💰 11.9 COST BREAKDOWN
 
 Service	Usage	Cost
-Railway Hobby	512MB RAM, 1 vCPU	$5
-Postgres	10GB storage	$10
-LLM	10K req/day	$5
+Fly.io Backend	256MB RAM, shared CPU	$0 (free tier)
+Fly.io Frontend	256MB RAM, shared CPU	$0 (free tier)
+Fly Postgres	1GB storage	$0 (free tier)
+LLM (OpenRouter)	10K req/day	$5
 Domain	ai-car-finder.app	$0
-Cloudflare	SSL + DDoS	$0
-ИТОГО		$20/мес
+ИТОГО		$5/мес (LLM only)
 
 text
-500 hours compute = $5 (500h included)
-10GB DB = $10
-1GB outbound = $0 (included)
+3 shared VMs = $0 (free tier)
+1GB DB = $0 (free tier)
+100GB outbound = $0 (free tier)
 🧪 11.10 SMOKE TESTS
 bash
 #!/bin/bash
@@ -1990,36 +2002,37 @@ curl -X POST https://api.ai-car-finder.app/admin/auth/login \
 echo "✅ All smoke tests passed!"
 📈 11.11 SCALING PATH
 text
-Phase 1 (MVP): 1 instance → 10K req/day ✓
+Phase 1 (MVP): 1 machine → 10K req/day ✓
 Phase 2: Auto-scale → 100K req/day
 Phase 3: Multi-region → 1M req/day
-Horizontal: railway scale --instance-count 4
-Vertical: railway scale --memory 2GB
+Horizontal: fly scale count 4 -a ai-car-finder-backend
+Vertical: fly scale memory 512 -a ai-car-finder-backend
 🔗 11.12 CUSTOM DOMAIN SETUP
 bash
-# 1. Add domain in Railway dashboard
-railway domain add ai-car-finder.app
-# 2. Cloudflare DNS
-A api.ai-car-finder.app → Railway IP
-CNAME *.ai-car-finder.app → railway.app
+# 1. Add certificate in Fly.io
+fly certs add ai-car-finder.app -a ai-car-finder-frontend
+fly certs add api.ai-car-finder.app -a ai-car-finder-backend
+# 2. DNS (Cloudflare or other)
+CNAME ai-car-finder.app → ai-car-finder-frontend.fly.dev
+CNAME api.ai-car-finder.app → ai-car-finder-backend.fly.dev
 # 3. SSL auto-provisioned (5min)
 ✅ 11. DEPLOYMENT — 100% READY!
 text
-☁️ Railway: $20/мес, 2-click deploy
+☁️ Fly.io: free tier, fly deploy
 🐳 Docker: Backend + Frontend containers
 🚀 CI/CD: GitHub Actions → Auto-deploy
-🌍 3 envs: Prod/Staging/Preview PRs
-🔧 Config: Native UI (no YAML hell)
+🌍 Multi-region ready (ams, iad, etc.)
+🔧 Config: fly.toml + fly secrets
 🧪 Smoke tests: 30s post-deploy
-💰 Cost: Predictable $20/мес
-🔄 Zero-downtime: Blue-green native
-🎯 Команда: railway login && git push = LIVE
+💰 Cost: $0/мес (free tier) + $5 LLM
+🔄 Zero-downtime: Rolling deploys native
+🎯 Команда: fly auth login && fly deploy = LIVE
 📋 Runbook: 0 DevOps knowledge needed
 text
-$ time bash <(curl -s https://railway.app/install.sh)
-$ railway login
-$ git push origin main
-🚀 Deployed to https://ai-car-finder.app in 2m15s
+$ curl -L https://fly.io/install.sh | sh
+$ fly auth login
+$ cd backend && fly deploy
+🚀 Deployed to https://ai-car-finder-backend.fly.dev in 2m
 
 
 
@@ -2079,9 +2092,9 @@ text
  12.5 OBSERVABILITY
 ✅  Grafana dashboards (3x: Exec/Eng/Admin)
 ✅  Slack alerts (accuracy<80%, cost>$1/h)
-✅  Structured JSON logs (Railway Logs)
+✅  Structured JSON logs (Fly.io Logs)
  12.6 DEPLOYMENT
-✅  Railway 2-click deploy (git push)
+✅  Fly.io deploy (fly deploy)
 ✅  Zero-downtime blue-green
 ✅  Smoke tests green (30s post-deploy)
 ✅  Custom domain + SSL provisioned
@@ -2121,7 +2134,7 @@ text
 ✅  Security scan: No vulnerabilities
 GATE 3: Production Deploy
 text
-✅  git push origin main → Railway deploy
+✅  fly deploy → Fly.io deploy
 ✅  Smoke tests (30s post-deploy)
 ✅  All dashboards green (Grafana)
 ✅  Custom domain SSL active (5min)
@@ -2132,12 +2145,12 @@ Parse accuracy <80%
 P95 latency >5s
 LLM cost >$2/hour
 Catalog unavailable >15min
-Rollback: railway rollback --service api (30s)
+Rollback: fly deploy --image <previous-image> (30s)
 📈 12.6 SUCCESS METRICS (Day 1)
 
 Metric	Day 1 Target	Monitoring
 Parse Accuracy	>85%	Grafana SLO
-API Uptime	100%	Railway dashboard
+API Uptime	100%	Fly.io dashboard
 Requests	100+	Live dashboard
 LLM Cost	<$0.50	Stripe dashboard
 Admin Actions	1+ uploads	Audit log
@@ -2160,7 +2173,7 @@ git pull origin main && npm ci && npm test && npm run build
 curl -f https://staging.ai-car-finder.app/health
 artillery run load-test.yml
 # Deploy
-railway up --service api
+cd backend && fly deploy
 sleep 30 # Health checks
 ./smoke-tests.sh
 # Production
@@ -2184,7 +2197,7 @@ text
 🎯 18 Acceptance Criteria (P0=12, P1=6)
 🧪 95% Test Coverage (Unit + Integration + E2E)
 📊 6 Gates (Code → Production)
-🚀 2-click Deploy (Railway git push)
+🚀 Easy Deploy (fly deploy)
 📈 Live SLO Monitoring (Grafana + Slack)
 📋 Rollback Plan (30s recovery)
 🎬 Launch Checklist (30min total)
