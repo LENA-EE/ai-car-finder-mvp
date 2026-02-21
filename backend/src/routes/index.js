@@ -6,9 +6,13 @@ const authRoutes = require('./auth.routes');
 const adminRoutes = require('./admin.routes');
 const errorsRoutes = require('./errors.routes');
 const catalogRoutes = require('./catalog.routes');
+const vinRoutes = require('./vin.routes');
 
 // Public API
 router.use('/api/v1', publicRoutes);
+
+// VIN Decoder API (public)
+router.use('/api/v1/vin', vinRoutes);
 
 // Auth API
 router.use('/api/v1/admin/auth', authRoutes);
