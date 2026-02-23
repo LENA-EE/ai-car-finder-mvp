@@ -1,5 +1,6 @@
 const navItems = [
-  { key: "user", label: "Поиск" },
+  { key: "chat", label: "Чат" },
+  { key: "vin", label: "VIN-проверка" },
   { key: "admin", label: "Админ" },
   { key: "catalog", label: "Каталог" },
   { key: "prompts", label: "Промпты" },

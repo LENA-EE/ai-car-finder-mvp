@@ -4,6 +4,14 @@ export const endpoints = {
   // Public
   parse: `${API_URL}/api/v1/parse`,
   car: (id) => `${API_URL}/api/v1/cars/${id}`,
+
+  // Chat
+  chat: `${API_URL}/api/v1/chat`,
+
+  // VIN
+  vinDecode: `${API_URL}/api/v1/vin/decode`,
+  vinCheck: `${API_URL}/api/v1/vin/check`,
+
   // Auth
   login: `${API_URL}/api/v1/admin/auth/login`,
 

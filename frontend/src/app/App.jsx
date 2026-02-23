@@ -2,7 +2,8 @@ import { useState } from "react";
 import { AuthProvider, useAuthContext } from "./providers/AuthProvider";
 import { Header } from "@/widgets/Header";
 import { Navigation } from "@/widgets/Navigation";
-import { SearchPage } from "@/pages/SearchPage";
+import { ChatPage } from "@/pages/ChatPage";
+import { VinPage } from "@/pages/VinPage";
 import { AdminPage } from "@/pages/AdminPage";
 import { CatalogPage } from "@/pages/CatalogPage";
 import { PromptsPage } from "@/pages/PromptsPage";
@@ -11,7 +12,7 @@ import { LoginForm } from "@/features/auth";
 import "./styles/index.css";
 
 function AppContent() {
-  const [page, setPage] = useState("user");
+  const [page, setPage] = useState("chat");
   const { user, login, logout } = useAuthContext();
 
   const needsAuth = page === "admin" || page === "prompts" || page === "catalog" || page === "errors";
@@ -19,7 +20,7 @@ function AppContent() {
 
   const handleLogout = () => {
     logout();
-    setPage("user");
+    setPage("chat");
   };
 
   return (
@@ -27,7 +28,8 @@ function AppContent() {
       <Header user={user} onLogout={handleLogout} />
       <Navigation currentPage={page} onNavigate={setPage} />
 
-      {page === "user" && <SearchPage />}
+      {page === "chat" && <ChatPage />}
+      {page === "vin" && <VinPage />}
       {needsAuth && !isAuthed && <LoginForm onLogin={login} />}
       {page === "admin" && isAuthed && <AdminPage />}
       {page === "catalog" && isAuthed && <CatalogPage />}
