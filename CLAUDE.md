@@ -1,20 +1,43 @@
-﻿# CLAUDE.md
+# CLAUDE.md
 
 This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 
 ## Project Overview
 
-AI Car Finder MVP - a multi-agent LLM system for natural language car search. Users can query in Russian slang (e.g., "бумер x5 дизель до 5 млн") and get matching cars from a PostgreSQL catalog.
+AI Car Finder MVP - интеллектуальный помощник для поиска автомобилей с AI-агентом и Tool Use.
 
-### Key Features (2026)
+### Ключевые особенности
 
-- **Multi-Agent Pipeline**: Security → Classifier → Parser → Search
-- **Russian Slang Support**: Understands "бумер", "гелик", "тачка" via synonyms table
-- **Semantic Search**: pgvector + OpenAI embeddings for abstract queries ("надёжная семейная машина")
-- **Post-Search Filter Chips**: Dynamic client-side filters for instant result refinement
-  - 5 filter groups: engine, transmission, drive, body, year
-  - Faceted counts, AND/OR logic, disabled chips for impossible combinations
-  - No backend calls - instant filtering
+- **AI Agent с Tool Use**: Агент сам решает какие инструменты вызывать (search, VIN check, etc.)
+- **Два режима чата**: "Быстрый подбор" (кратко) и "Живое общение" (дружелюбно, с эмодзи)
+- **Russian Slang Support**: Понимает "бумер", "мерс", "тачка до 2 лямов"
+- **Semantic Search**: pgvector для абстрактных запросов ("надёжная семейная машина")
+- **VIN Decoder & Checker**: Расшифровка и проверка по базам (ФНП, ГИБДД)
+
+### Архитектура AI Agent
+
+```
+Пользователь: "Найди кроссовер до 2 млн и проверь VIN"
+                    │
+                    ▼
+┌─────────────────────────────────────────────────────┐
+│                   AI Agent                          │
+│   DeepSeek с Tool Use (function calling)            │
+│                                                     │
+│   Доступные инструменты:                            │
+│   • search_cars      — поиск по параметрам          │
+│   • check_vin        — полная проверка VIN          │
+│   • decode_vin       — расшифровка VIN              │
+│   • semantic_search  — поиск по описанию            │
+│   • get_model_info   — болячки, обслуживание        │
+│   • compare_models   — сравнение моделей            │
+│                                                     │
+│   AI сам выбирает какие tools вызвать!              │
+└─────────────────────────────────────────────────────┘
+                    │
+                    ▼
+            Человечный ответ
+```
 
 ### Deployment
 
@@ -45,147 +68,152 @@ npm run build     # Production build
 npm run lint      # ESLint
 ```
 
-### Docker (Full Stack)
-
-```bash
-docker-compose up --build      # Start all services
-docker-compose down            # Stop all
-```
-
-### Render Deployment
-
-Render auto-deploys on push to main. Manual actions:
-
-```bash
-# View logs in Render Dashboard or CLI
-render logs ai-car-finder-backend
-
-# Database: use Neon SQL Editor
-# https://console.neon.tech
-```
-
 ### Testing
 
 ```bash
-./smoke-tests.sh               # Smoke tests (health, parse, auth endpoints)
-
 # Manual API tests
-curl http://localhost:3002/health
-curl -X POST http://localhost:3002/api/v1/parse \
+curl http://localhost:3000/health
+
+# Test chat API
+curl -X POST http://localhost:3000/api/v1/chat \
   -H "Content-Type: application/json" \
-  -d '{"query": "bmw x5 diesel"}'
+  -d '{"message": "Найди кроссовер до 2 млн", "mode": "friendly"}'
 ```
 
-## Architecture
-
-### Multi-Agent System
-
-The core innovation is a pipeline of specialized LLM agents:
+## Project Structure
 
 ```
-User Query → [Security Agent] → [Classifier Agent] → [Parser Agent] → [Search] → Results
-                                      ↓
-                              filters | semantic | hybrid
-                                      ↓
-                              SQL WHERE | Vector Search | Both
+ai-car-finder-mvp/
+├── backend/
+│   └── src/
+│       ├── services/
+│       │   ├── agent/           # NEW: AI Agent с Tool Use
+│       │   │   ├── index.js     # Главный агент
+│       │   │   ├── tools.js     # Описания инструментов
+│       │   │   └── executor.js  # Исполнитель tools
+│       │   ├── chat/            # Chat service (использует agent)
+│       │   ├── vin/             # VIN decoder & checker
+│       │   │   ├── decoder.service.js
+│       │   │   ├── checker.service.js
+│       │   │   ├── fnp.service.js    # ФНП (залоги)
+│       │   │   └── nhtsa.service.js  # NHTSA API
+│       │   ├── search/          # Поиск машин
+│       │   │   ├── cars.service.js
+│       │   │   └── semantic.service.js
+│       │   ├── parsing/         # Парсинг запросов
+│       │   └── embeddings/      # Векторные представления
+│       ├── controllers/
+│       ├── routes/
+│       └── config/
+├── frontend/
+│   └── src/
+│       ├── pages/
+│       │   ├── ChatPage/        # Главная страница с чатом
+│       │   └── VinPage/         # VIN-проверка
+│       ├── features/
+│       │   └── chat/            # Chat UI с toggle режимов
+│       └── widgets/
+│           └── Navigation/      # [Чат] [VIN-проверка] [Админ]...
+├── specs/
+│   ├── 1-vin-decoder/           # Спецификация VIN Decoder
+│   └── 2-tools-api/             # Спецификация Car Tools API (планируется)
+└── database/
+    └── migrations/
 ```
 
-1. **Security Agent** (`backend/src/services/agents/security.agent.js`): Validates query safety (injection, off-topic, toxic content). Uses LLM with regex fallback.
+## Key Files
 
-2. **Classifier Agent** (`backend/src/services/agents/classifier.agent.js`): Determines query type:
-   - `filters` — specific search (brand, model, year)
-   - `semantic` — abstract search ("надёжная семейная машина")
-   - `hybrid` — combination ("экономичный BMW до 3 млн")
+| File | Purpose |
+|------|---------|
+| `backend/src/services/agent/index.js` | AI Agent с Tool Use |
+| `backend/src/services/agent/tools.js` | Описания инструментов |
+| `backend/src/services/agent/executor.js` | Исполнитель tools |
+| `backend/src/services/chat/chat.service.js` | Chat orchestrator |
+| `frontend/src/features/chat/ui/Chat.jsx` | Chat UI с toggle режимов |
 
-3. **Parser Agent** (`backend/src/services/parsing/llm.service.js`): Converts natural language to JSON filters using few-shot learning. Understands Russian car slang via synonyms table.
+## API Endpoints
 
-4. **Semantic Search** (`backend/src/services/search/semantic.service.js`): Vector similarity search using pgvector + OpenAI embeddings.
+### Chat API
+```
+POST /api/v1/chat
+Body: {
+  "message": "Найди кроссовер до 2 млн",
+  "history": [],
+  "mode": "friendly"  // или "quick"
+}
 
-Agent models configurable via env vars: `SECURITY_AGENT_MODEL`, `CLASSIFIER_AGENT_MODEL`, `PARSER_AGENT_MODEL`.
+Response: {
+  "message": "Нашёл 15 вариантов...",
+  "cars": [...],
+  "vinResult": null,
+  "suggestions": ["Показать ещё", "Только дизель"],
+  "toolsUsed": ["search_cars"]
+}
+```
 
-### Backend Layers
+### VIN API
+```
+POST /api/v1/vin/decode
+Body: { "vin": "WBAPH5C55BA123456" }
 
-- **Controllers** (`backend/src/controllers/`): Route handlers. `parse.controller.js` orchestrates the full request flow.
-- **Services** (`backend/src/services/`): Business logic. Agents, parsing, search, auth.
-- **Repositories** (`backend/src/repositories/`): Database queries. All SQL isolated here.
-- **Config** (`backend/src/config/`): Database pool, JWT, rate limits, agent config.
+POST /api/v1/vin/check
+Body: { "vin": "WBAPH5C55BA123456" }
+```
 
-### Frontend (FSD Architecture)
-
-- **pages/**: `UserSearchPage.jsx` (main search), `AdminDashboard.jsx` (admin panel)
-- **features/**: auth, search, catalog, analytics, errors
-- **entities/**: car, error, user domain objects
-- **shared/**: API client, hooks, utilities
-
-### Key Configuration Files
-
-| File                                       | Purpose                          |
-| ------------------------------------------ | -------------------------------- |
-| `backend/src/config/agents.js`             | LLM agent model selection        |
-| `backend/src/constants/defaultPrompt.js`   | Parser agent system prompt       |
-| `backend/src/constants/fewShotExamples.js` | Few-shot examples for parsing    |
-| `database/init.sql`                        | Schema (9 tables) + seed data    |
-| `database/migrations/001_add_pgvector.sql` | pgvector extension + embeddings  |
-| `render.yaml`                              | Render deployment configuration  |
+### Other
+- `GET /health` — Health check
+- `POST /api/v1/admin/auth/login` — Admin login
+- `GET /api/v1/admin/analytics` — Stats (JWT required)
 
 ## Database
 
-Neon PostgreSQL 16 with pgvector extension. Key tables:
+Neon PostgreSQL 16 with pgvector extension.
 
-- `cars_catalog`: Vehicle catalog (50K+ records) with `embedding vector(1536)` column
-- `parse_sessions`: Request logging with metrics
-- `prompts`: Hot-reloadable prompt versions
-- `synonyms`: Slang mappings (бумер → BMW)
-- `error_graveyard`: Failed query tracking
-- `audit_log`: Admin action history
-
-**Migrations:** `database/migrations/` — run manually in Neon SQL Editor.
-
-## API Structure
-
-- **Public**: `POST /api/v1/parse`, `GET /api/v1/cars/:id`, `GET /health`
-- **Auth**: `POST /api/v1/admin/auth/login`, `GET /api/v1/admin/auth/me`
-- **Admin** (JWT required):
-  - `/api/v1/admin/analytics` — usage stats
-  - `/api/v1/admin/prompts` — prompt management
-  - `/api/v1/admin/catalog/upload` — catalog upload
-  - `/api/v1/admin/catalog/embeddings` — generate embeddings
-  - `/api/v1/admin/catalog/embeddings/stats` — embedding coverage
-  - `/api/v1/admin/errors` — error graveyard
-
-## Key Patterns
-
-- **LLM Fallback Chain**: LLM parser → keyword parser → regex (graceful degradation)
-- **Hot-Reload Config**: Prompts stored in DB, editable without restart
-- **Error Graveyard**: Failed queries logged for iterative improvement
-- **Rate Limiting**: 100 req/min users, 50 req/min admins
+Key tables:
+- `cars_catalog` — Vehicle catalog with embeddings
+- `vin_wmi` — WMI codes for VIN decoding
+- `synonyms` — Slang mappings (бумер → BMW)
+- `prompts` — Hot-reloadable prompts
+- `parse_sessions` — Request logging
 
 ## Environment Variables
 
 Required:
-
-- `DATABASE_URL`: Neon PostgreSQL connection string
-- `OPENROUTER_API_KEY`: LLM API access (DeepSeek + OpenAI embeddings via OpenRouter)
-- `JWT_SECRET`: Auth token signing (32+ chars)
+- `DATABASE_URL` — Neon PostgreSQL connection
+- `OPENROUTER_API_KEY` — LLM API (DeepSeek)
+- `JWT_SECRET` — Auth token signing
 
 Optional:
+- `FNP_MOCK=true` — Mock ФНП для тестов (API только из России)
+- `TOOLS_API_URL` — URL удалённого Car Tools API (если задан, tools выполняются через API)
 
-- `SECURITY_AGENT_MODEL`, `CLASSIFIER_AGENT_MODEL`, `PARSER_AGENT_MODEL`: Override default `deepseek/deepseek-chat`
-- `RATE_LIMIT_USER`, `RATE_LIMIT_ADMIN`: Custom rate limits
+## Car Tools API Integration
 
-## Admin Access
+Инструменты можно выполнять локально или через удалённый Car Tools API.
 
-Default credentials: `admin@ai-car-finder.app` / `admin123`
+**Локально (по умолчанию):**
+Tools выполняются напрямую через локальные сервисы (search, VIN, etc.)
+
+**Через Car Tools API:**
+Добавь переменную окружения:
+```
+TOOLS_API_URL=https://car-tools-api-mcp.onrender.com
+```
+
+При включении:
+1. Все вызовы tools идут через API
+2. При ошибке API — автоматический fallback на локальное выполнение
+3. Единая точка входа для всех инструментов
+
+**Репозиторий Car Tools API:** https://github.com/LENA-EE/car-tools-api-mcp
 
 ## Rules for Claude
 
-- Всегда читай этот файл перед сложными изменениями.
-- Не меняй:
-  - миграции и `database/init.sql` без явного запроса;
-  - маршруты API и контракты ответа без комментария.
-    Никогда не меняй файл без моего разрешения architecture.txt, структураФайлаАвтоРу.txt и примеры промптов
+- Всегда читай этот файл перед сложными изменениями
+- Не меняй без запроса:
+  - Миграции и `database/init.sql`
+  - Маршруты API и контракты ответа
 - При правках:
-  - сначала опиши план изменений списком;
-  - затем показывай только изменённые файлы/фрагменты;
-  - по возможности добавляй/обновляй тесты.
-- Если не уверен в бизнес-логике — задавай уточняющие вопросы вместо догадок.
+  - Сначала опиши план
+  - Показывай только изменённые файлы
+- Если не уверен — спрашивай
