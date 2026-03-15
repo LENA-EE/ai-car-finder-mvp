@@ -1,34 +1,61 @@
+import { useState, useRef, useEffect, useCallback } from "react";
 import { StatusBadge } from "@/features/vin-checker";
+
+// Helper: car object comes in 2 formats (parse DB vs chat agent)
+function getCarName(car) {
+  if (car.mark_name) return `${car.mark_name} ${car.folder_name || ""}`.trim();
+  if (car.name) return car.name;
+  return "Unknown";
+}
+
+function getCarBody(car) {
+  return car.body_type || car.body || null;
+}
+
+function getCarEngine(car) {
+  if (car.engine_volume) return `${car.engine_volume}L ${car.engine_type === "diesel" ? "дизель" : "бензин"}`;
+  if (car.engine) return car.engine;
+  return null;
+}
+
+function getCarTransmission(car) {
+  const t = car.transmission;
+  if (!t) return null;
+  const map = { automatic: "АТ", AT: "АТ", manual: "МТ", MT: "МТ", robot: "робот", AMT: "робот", CVT: "вариатор", variator: "вариатор" };
+  return map[t] || t;
+}
+
+function getCarDrive(car) {
+  return car.drive_type || car.drive || null;
+}
+
+function getCarHp(car) {
+  if (car.hp) return `${car.hp} л.с.`;
+  // Try to extract from engine string like "3.0L diesel, 249 л.с."
+  const match = car.engine?.match(/(\d+)\s*л\.?\s*с/);
+  if (match) return `${match[1]} л.с.`;
+  return null;
+}
 
 export function ChatMessage({ message, onSuggestionClick, onCarClick }) {
   const isUser = message.role === "user";
-
   return (
-    <div className={`flex ${isUser ? "justify-end" : "justify-start"} mb-4`}>
+    <div className={`chat-bubble-row ${isUser ? "chat-bubble-row--user" : "chat-bubble-row--assistant"}`}>
       <div
-        className={`max-w-[80%] rounded-2xl px-4 py-3 ${
+        className={`chat-bubble ${
           isUser
-            ? "bg-blue-500 text-white rounded-br-md"
+            ? "chat-bubble--user"
             : message.isError
-              ? "bg-red-500/20 text-red-300 border border-red-500/30 rounded-bl-md"
-              : "bg-slate-700 text-slate-200 rounded-bl-md"
+              ? "chat-bubble--error"
+              : "chat-bubble--assistant"
         }`}
       >
         {/* Text content */}
-        <div className="whitespace-pre-wrap">{message.content}</div>
+        <div className="chat-bubble-text">{message.content}</div>
 
         {/* Car results */}
         {message.cars && message.cars.length > 0 && (
-          <div className="mt-3 space-y-2">
-            {message.cars.slice(0, 5).map((car, i) => (
-              <CarCard key={car.id || i} car={car} onClick={() => onCarClick?.(car)} />
-            ))}
-            {message.cars.length > 5 && (
-              <div className="text-slate-400 text-sm">
-                И ещё {message.cars.length - 5} вариантов...
-              </div>
-            )}
-          </div>
+          <CarList cars={message.cars} onCarClick={onCarClick} />
         )}
 
         {/* VIN result */}
@@ -36,12 +63,12 @@ export function ChatMessage({ message, onSuggestionClick, onCarClick }) {
 
         {/* Suggestions */}
         {message.suggestions && message.suggestions.length > 0 && (
-          <div className="mt-3 flex flex-wrap gap-2">
+          <div className="chat-suggestions">
             {message.suggestions.map((s, i) => (
               <button
                 key={i}
                 onClick={() => onSuggestionClick?.(s)}
-                className="px-3 py-1.5 bg-slate-600 hover:bg-slate-500 rounded-full text-sm transition-colors"
+                className="chat-suggestion-btn"
               >
                 {s}
               </button>
@@ -53,47 +80,77 @@ export function ChatMessage({ message, onSuggestionClick, onCarClick }) {
   );
 }
 
-function CarCard({ car, onClick }) {
-  const bodyTypeRu = {
-    sedan: "Седан",
-    hatchback: "Хэтчбек",
-    suv: "Кроссовер",
-    crossover: "Кроссовер",
-    wagon: "Универсал",
-    coupe: "Купе",
-    minivan: "Минивэн",
-    pickup: "Пикап",
-    cabrio: "Кабриолет",
-  };
+const CARS_PER_PAGE = 10;
 
-  const driveTypeRu = {
-    front: "Передний",
-    rear: "Задний",
-    all: "Полный",
-    "4wd": "Полный",
-  };
+function CarList({ cars, onCarClick }) {
+  const [visible, setVisible] = useState(CARS_PER_PAGE);
+  const sentinelRef = useRef(null);
+
+  const loadMore = useCallback(() => {
+    setVisible((v) => Math.min(v + CARS_PER_PAGE, cars.length));
+  }, [cars.length]);
+
+  useEffect(() => {
+    const sentinel = sentinelRef.current;
+    if (!sentinel) return;
+
+    const observer = new IntersectionObserver(
+      ([entry]) => {
+        if (entry.isIntersecting) loadMore();
+      },
+      { rootMargin: "200px" }
+    );
+
+    observer.observe(sentinel);
+    return () => observer.disconnect();
+  }, [loadMore, visible]);
 
   return (
-    <div
-      onClick={onClick}
-      className="bg-slate-800/50 rounded-lg p-3 cursor-pointer hover:bg-slate-800 transition-colors border border-transparent hover:border-cyan-500/30"
-    >
-      <div className="flex justify-between items-start">
-        <div className="font-medium text-cyan-400">
-          {car.mark_name} {car.folder_name} {car.year}
+    <div className="chat-cars">
+      {cars.slice(0, visible).map((car, i) => (
+        <CarCard key={car.id || i} car={car} onClick={() => onCarClick?.(car)} />
+      ))}
+      {visible < cars.length && (
+        <div ref={sentinelRef} className="chat-cars-sentinel">
+          <span className="chat-cars-sentinel__text">
+            Ещё {cars.length - visible} вариантов...
+          </span>
+        </div>
+      )}
+    </div>
+  );
+}
+
+function CarCard({ car, onClick }) {
+  const name = getCarName(car);
+  const engine = getCarEngine(car);
+  const hp = getCarHp(car);
+  const trans = getCarTransmission(car);
+  const body = getCarBody(car);
+  const drive = getCarDrive(car);
+
+  return (
+    <div onClick={onClick} className="chat-car-card">
+      <div className="chat-car-header">
+        <div className="chat-car-name">
+          {name} {car.year}
         </div>
         {car.price && (
-          <div className="text-slate-200 font-semibold whitespace-nowrap ml-2">
+          <div className="chat-car-price">
             {(car.price / 1000000).toFixed(1)} млн ₽
           </div>
         )}
       </div>
-      <div className="text-slate-400 text-sm mt-1">
-        {car.engine_volume}L {car.engine_type === "diesel" ? "дизель" : "бензин"} • {car.hp} л.с. • {car.transmission === "automatic" ? "АТ" : car.transmission === "robot" ? "робот" : "МТ"}
-      </div>
-      <div className="text-slate-500 text-xs mt-1">
-        {bodyTypeRu[car.body_type?.toLowerCase()] || car.body_type} • {driveTypeRu[car.drive_type?.toLowerCase()] || car.drive_type} привод
-      </div>
+      {(engine || hp || trans) && (
+        <div className="chat-car-specs">
+          {[engine, hp, trans].filter(Boolean).join(" \u2022 ")}
+        </div>
+      )}
+      {(body || drive) && (
+        <div className="chat-car-extra">
+          {[body, drive].filter(Boolean).join(" \u2022 ")}
+        </div>
+      )}
     </div>
   );
 }
@@ -102,21 +159,21 @@ function VinResultCard({ result }) {
   const { decode, status } = result;
 
   return (
-    <div className="mt-3 bg-slate-800/50 rounded-lg p-3">
-      <div className="flex items-center justify-between mb-2">
-        <span className="font-medium text-cyan-400">
+    <div className="chat-vin-card">
+      <div className="chat-vin-header">
+        <span className="chat-vin-name">
           {decode?.brand} {decode?.model} {decode?.year}
         </span>
         {status && <StatusBadge status={status} size="sm" />}
       </div>
       {decode?.country && (
-        <div className="text-slate-400 text-sm">{decode.country}</div>
+        <div className="chat-vin-detail">{decode.country}</div>
       )}
       {decode?.engine && (
-        <div className="text-slate-400 text-sm">{decode.engine}</div>
+        <div className="chat-vin-detail">{decode.engine}</div>
       )}
       {result.fnp && (
-        <div className={`text-sm mt-2 ${result.fnp.pledgesCount > 0 ? "text-red-400" : "text-green-400"}`}>
+        <div className={`chat-vin-fnp ${result.fnp.pledgesCount > 0 ? "chat-vin-fnp--danger" : "chat-vin-fnp--ok"}`}>
           {result.fnp.message}
         </div>
       )}
@@ -127,108 +184,49 @@ function VinResultCard({ result }) {
 export function CarDetailModal({ car, onClose, onCheckVin }) {
   if (!car) return null;
 
-  const bodyTypeRu = {
-    sedan: "Седан",
-    hatchback: "Хэтчбек",
-    suv: "Кроссовер",
-    crossover: "Кроссовер",
-    wagon: "Универсал",
-    coupe: "Купе",
-    minivan: "Минивэн",
-    pickup: "Пикап",
-    cabrio: "Кабриолет",
-  };
-
-  const driveTypeRu = {
-    front: "Передний",
-    rear: "Задний",
-    all: "Полный",
-    "4wd": "Полный",
-  };
-
-  const engineTypeRu = {
-    petrol: "Бензин",
-    diesel: "Дизель",
-    electric: "Электро",
-    hybrid: "Гибрид",
-  };
-
-  const transmissionRu = {
-    automatic: "Автомат",
-    manual: "Механика",
-    robot: "Робот",
-    variator: "Вариатор",
-  };
+  const name = getCarName(car);
+  const body = getCarBody(car);
+  const engine = getCarEngine(car);
+  const hp = getCarHp(car);
+  const trans = getCarTransmission(car);
+  const drive = getCarDrive(car);
 
   return (
-    <div
-      className="fixed inset-0 bg-black/70 flex items-center justify-center z-50 p-4"
-      onClick={onClose}
-    >
-      <div
-        className="bg-slate-800 rounded-2xl max-w-md w-full p-6 relative"
-        onClick={(e) => e.stopPropagation()}
-      >
-        {/* Close button */}
-        <button
-          onClick={onClose}
-          className="absolute top-4 right-4 text-slate-400 hover:text-white text-2xl"
-        >
-          ×
-        </button>
+    <div className="chat-modal-overlay" onClick={onClose}>
+      <div className="chat-modal" onClick={(e) => e.stopPropagation()}>
+        <button onClick={onClose} className="chat-modal-close">&times;</button>
 
-        {/* Header */}
-        <h3 className="text-xl font-bold text-cyan-400 mb-4">
-          {car.mark_name} {car.folder_name}
-        </h3>
+        <h3 className="chat-modal-title">{name}</h3>
 
-        {/* Details grid */}
-        <div className="space-y-3">
-          <DetailRow label="Год" value={car.year} />
+        <div className="chat-modal-details">
+          <DetailRow label="Год" value={car.year || "—"} />
           <DetailRow
             label="Цена"
-            value={car.price ? `${car.price.toLocaleString("ru-RU")} ₽` : "—"}
+            value={car.price ? `${car.price.toLocaleString("ru-RU")} \u20BD` : "—"}
           />
-          <DetailRow
-            label="Кузов"
-            value={bodyTypeRu[car.body_type?.toLowerCase()] || car.body_type || "—"}
-          />
-          <DetailRow
-            label="Двигатель"
-            value={`${car.engine_volume || "—"}L ${engineTypeRu[car.engine_type?.toLowerCase()] || car.engine_type || ""}`}
-          />
-          <DetailRow label="Мощность" value={car.hp ? `${car.hp} л.с.` : "—"} />
-          <DetailRow
-            label="Коробка"
-            value={transmissionRu[car.transmission?.toLowerCase()] || car.transmission || "—"}
-          />
-          <DetailRow
-            label="Привод"
-            value={driveTypeRu[car.drive_type?.toLowerCase()] || car.drive_type || "—"}
-          />
+          <DetailRow label="Кузов" value={body || "—"} />
+          <DetailRow label="Двигатель" value={engine || "—"} />
+          <DetailRow label="Мощность" value={hp || "—"} />
+          <DetailRow label="Коробка" value={trans || "—"} />
+          <DetailRow label="Привод" value={drive || "—"} />
         </div>
 
-        {/* Actions */}
-        <div className="mt-6 flex gap-3">
-          <button
-            onClick={onClose}
-            className="flex-1 py-3 bg-slate-700 hover:bg-slate-600 rounded-xl text-slate-200 transition-colors"
-          >
+        <div className="chat-modal-actions">
+          <button onClick={onClose} className="chat-modal-btn chat-modal-btn--secondary">
             Закрыть
           </button>
           <button
             onClick={() => {
-              onCheckVin?.(`Найди похожие ${car.mark_name} ${car.folder_name}`);
+              onCheckVin?.(`Найди похожие ${name}`);
               onClose();
             }}
-            className="flex-1 py-3 bg-cyan-600 hover:bg-cyan-500 rounded-xl text-white transition-colors"
+            className="chat-modal-btn chat-modal-btn--primary"
           >
             Похожие
           </button>
         </div>
 
-        {/* Hint */}
-        <div className="mt-4 text-center text-slate-500 text-xs">
+        <div className="chat-modal-hint">
           Есть VIN? Проверь историю в чате
         </div>
       </div>
@@ -238,9 +236,9 @@ export function CarDetailModal({ car, onClose, onCheckVin }) {
 
 function DetailRow({ label, value }) {
   return (
-    <div className="flex justify-between border-b border-slate-700 pb-2">
-      <span className="text-slate-400">{label}</span>
-      <span className="text-slate-200">{value}</span>
+    <div className="chat-detail-row">
+      <span>{label}</span>
+      <span>{value}</span>
     </div>
   );
 }

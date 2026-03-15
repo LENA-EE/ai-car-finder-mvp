@@ -2,11 +2,12 @@
  * VIN Decoder Service
  *
  * Decodes VIN to brand, model, year, country.
- * Phase 3 implementation.
+ * Uses local WMI database + NHTSA API fallback.
  */
 
 const { validate, extractComponents, decodeYear } = require('./validator');
 const vinRepo = require('../../repositories/vin.repository');
+const nhtsa = require('./nhtsa.service');
 
 /**
  * Decode VIN
@@ -23,15 +24,53 @@ async function decode(vin) {
   const normalizedVin = validation.vin;
   const components = extractComponents(normalizedVin);
 
-  // Lookup WMI (manufacturer)
+  // Lookup WMI (manufacturer) in local DB
   const wmiData = await vinRepo.getWmiData(components.wmi);
 
-  // Decode year
+  // Decode year from VIN position
   const year = decodeYear(components.yearCode);
+
+  // If local WMI lookup failed, try NHTSA API as fallback
+  if (!wmiData) {
+    try {
+      const nhtsaResult = await nhtsa.decodeVin(normalizedVin);
+      if (nhtsaResult.available && nhtsaResult.data) {
+        const d = nhtsaResult.data;
+        return {
+          valid: true,
+          vin: normalizedVin,
+          source: 'nhtsa',
+          decode: {
+            wmi: components.wmi,
+            region: d.plantCountry || 'Unknown',
+            country: d.plantCountry || 'Unknown',
+            manufacturer: d.manufacturer || 'Unknown',
+            brand: d.make || 'Unknown',
+            model: d.model || null,
+            year: d.year ? parseInt(d.year, 10) : year,
+            yearCode: components.yearCode,
+            plantCode: components.plantCode,
+            serial: components.serial,
+            checkDigit: components.checkDigit,
+            // Extra from NHTSA
+            bodyClass: d.bodyClass || null,
+            engineCylinders: d.engineCylinders || null,
+            engineDisplacement: d.engineDisplacement || null,
+            fuelType: d.fuelType || null,
+            driveType: d.driveType || null,
+            transmission: d.transmission || null,
+          },
+        };
+      }
+    } catch (err) {
+      console.log('[VIN Decoder] NHTSA fallback failed:', err.message);
+    }
+  }
 
   return {
     valid: true,
     vin: normalizedVin,
+    source: 'local',
     decode: {
       wmi: components.wmi,
       region: wmiData?.region || 'Unknown',

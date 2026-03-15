@@ -9,24 +9,32 @@
 
 const OpenAI = require('openai');
 
-const EMBEDDING_MODEL = 'openai/text-embedding-3-small';
+// Embeddings: OpenRouter (приоритет) → OpenAI direct (запасной)
 const EMBEDDING_DIMENSIONS = 1536;
+let embeddingsClient = null;
+let embeddingModel = null;
 
-// OpenRouter client for embeddings
-let openrouterClient = null;
+function getEmbeddingsClient() {
+  if (!embeddingsClient) {
+    const openrouterKey = process.env.OPENROUTER_API_KEY;
+    const openaiKey = process.env.OPENAI_API_KEY;
 
-function getOpenRouterClient() {
-  if (!openrouterClient) {
-    const apiKey = process.env.OPENROUTER_API_KEY;
-    if (!apiKey) {
-      throw new Error('OPENROUTER_API_KEY is not set');
+    if (openrouterKey) {
+      embeddingsClient = new OpenAI({ apiKey: openrouterKey, baseURL: 'https://openrouter.ai/api/v1' });
+      embeddingModel = 'openai/text-embedding-3-small';
+    } else if (openaiKey) {
+      embeddingsClient = new OpenAI({ apiKey: openaiKey });
+      embeddingModel = 'text-embedding-3-small';
+    } else {
+      throw new Error('No API key for embeddings (OPENROUTER_API_KEY or OPENAI_API_KEY)');
     }
-    openrouterClient = new OpenAI({
-      apiKey,
-      baseURL: 'https://openrouter.ai/api/v1',
-    });
   }
-  return openrouterClient;
+  return embeddingsClient;
+}
+
+function getEmbeddingModel() {
+  if (!embeddingModel) getEmbeddingsClient();
+  return embeddingModel;
 }
 
 /**
@@ -39,10 +47,10 @@ async function generateEmbedding(text) {
     throw new Error('Text is required for embedding generation');
   }
 
-  const client = getOpenRouterClient();
+  const client = getEmbeddingsClient();
 
   const response = await client.embeddings.create({
-    model: EMBEDDING_MODEL,
+    model: getEmbeddingModel(),
     input: text.trim(),
     dimensions: EMBEDDING_DIMENSIONS,
   });
@@ -69,7 +77,7 @@ async function generateEmbeddingsBatch(texts) {
     throw new Error('No valid texts provided');
   }
 
-  const client = getOpenRouterClient();
+  const client = getEmbeddingsClient();
 
   // OpenRouter batch limit (same as OpenAI: 2048 texts per request)
   const BATCH_SIZE = 2048;
@@ -80,7 +88,7 @@ async function generateEmbeddingsBatch(texts) {
     const batch = validTexts.slice(i, i + BATCH_SIZE);
 
     const response = await client.embeddings.create({
-      model: EMBEDDING_MODEL,
+      model: getEmbeddingModel(),
       input: batch.map(t => t.trim()),
       dimensions: EMBEDDING_DIMENSIONS,
     });
@@ -109,7 +117,7 @@ function estimateCost(tokens) {
  * Check if embeddings are available
  */
 function isAvailable() {
-  return !!process.env.OPENROUTER_API_KEY;
+  return !!(process.env.OPENAI_API_KEY || process.env.OPENROUTER_API_KEY);
 }
 
 module.exports = {
@@ -117,6 +125,6 @@ module.exports = {
   generateEmbeddingsBatch,
   estimateCost,
   isAvailable,
-  EMBEDDING_MODEL,
+  getEmbeddingModel,
   EMBEDDING_DIMENSIONS,
 };

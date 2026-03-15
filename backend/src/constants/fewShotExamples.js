@@ -29,6 +29,27 @@ const FEW_SHOT_EXAMPLES = [
     input: "резвая бмв седан",
     output: { mark_name: "BMW", body_type: "Седан", min_hp: 200 }
   },
+  // Body type + descriptive queries
+  {
+    input: "семейный кроссовер, надёжный, желательно японец",
+    output: { body_type: "Внедорожник 5 дв." }
+  },
+  {
+    input: "внедорожник, чтобы по трассе жрал мало и был быстрый",
+    output: { body_type: "Внедорожник 5 дв.", min_hp: 200 }
+  },
+  {
+    input: "кроссовер до 2 млн",
+    output: { body_type: "Внедорожник 5 дв.", price_max: 2000000 }
+  },
+  {
+    input: "седан для города автомат",
+    output: { body_type: "Седан", transmission: "AT" }
+  },
+  {
+    input: "универсал полный привод дизель",
+    output: { body_type: "Универсал", drive_type: "4WD", engine_type: "diesel" }
+  },
   // Slang and abbreviations
   {
     input: "до 700к, автомат, хэтч",
@@ -41,6 +62,10 @@ const FEW_SHOT_EXAMPLES = [
   {
     input: "немец седан механика",
     output: { body_type: "Седан", transmission: "MT" }
+  },
+  {
+    input: "до 1,2 млн, автомат, для города, расход небольшой",
+    output: { price_max: 1200000, transmission: "AT" }
   },
   // Unsupported filters (color, mileage, etc.) → ignore them
   {

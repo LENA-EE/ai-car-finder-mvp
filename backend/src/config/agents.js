@@ -2,7 +2,7 @@
  * Multi-Agent System Configuration
  *
  * Easily swap models for different agents here.
- * Currently all agents use DeepSeek via OpenRouter.
+ * DeepSeek напрямую (DEEPSEEK_API_KEY) или через OpenRouter.
  *
  * To switch to different models later:
  * - Security Agent: 'anthropic/claude-3-haiku' (fast, cheap)
@@ -12,23 +12,23 @@
  */
 
 module.exports = {
-  // Security Agent - validates input, detects injections
+  // Security Agent - use regex only (free, instant, no LLM tokens)
   security: {
-    enabled: true,
+    enabled: false,
     model: process.env.SECURITY_AGENT_MODEL || 'deepseek/deepseek-chat',
-    temperature: 0.0,  // Deterministic for security
-    max_tokens: 100,   // Short responses only
+    temperature: 0.0,
+    max_tokens: 100,
   },
 
-  // Classifier Agent - determines query type (filters/semantic/hybrid)
+  // Classifier Agent - use regex only (free, instant, no LLM tokens)
   classifier: {
-    enabled: true,
+    enabled: false,
     model: process.env.CLASSIFIER_AGENT_MODEL || 'deepseek/deepseek-chat',
-    temperature: 0.0,  // Deterministic classification
-    max_tokens: 100,   // Short responses only
+    temperature: 0.0,
+    max_tokens: 100,
   },
 
-  // Parser Agent - extracts search filters from text
+  // Parser Agent - the only one that needs LLM
   parser: {
     model: process.env.PARSER_AGENT_MODEL || 'deepseek/deepseek-chat',
     temperature: 0.1,
@@ -38,7 +38,7 @@ module.exports = {
   // Response Agent - generates human-like responses (future)
   response: {
     enabled: false,  // Not implemented yet
-    model: process.env.RESPONSE_AGENT_MODEL || 'deepseek/deepseek-chat',
+    model: process.env.RESPONSE_AGENT_MODEL || 'deepseek-chat',
     temperature: 0.7,  // More creative
     max_tokens: 300,
   },

@@ -37,6 +37,21 @@ async function runMigrations() {
         END IF;
       END $$;
     `);
+    // Knowledge base table for RAG articles
+    await pool.query(`
+      CREATE TABLE IF NOT EXISTS knowledge_base (
+        id SERIAL PRIMARY KEY,
+        title VARCHAR(500) NOT NULL,
+        description VARCHAR(1000),
+        content TEXT NOT NULL,
+        embedding vector(1536),
+        created_at TIMESTAMP DEFAULT NOW(),
+        updated_at TIMESTAMP DEFAULT NOW()
+      );
+    `);
+    await pool.query(`CREATE INDEX IF NOT EXISTS idx_kb_embedding_hnsw ON knowledge_base USING hnsw (embedding vector_cosine_ops) WITH (m = 16, ef_construction = 64);`);
+    await pool.query(`CREATE INDEX IF NOT EXISTS idx_kb_embedding_null ON knowledge_base (id) WHERE embedding IS NULL;`);
+
     console.log('Migrations checked');
   } catch (err) {
     console.error('Migration error:', err.message);
@@ -57,9 +72,9 @@ async function init() {
   }
 
   if (config.llmEnabled) {
-    console.log('OpenRouter LLM enabled (deepseek/deepseek-chat)');
+    console.log('LLM enabled via OpenRouter (DeepSeek)');
   } else {
-    console.log('OpenRouter LLM disabled (no API key), using keyword parser');
+    console.log('LLM disabled (no OPENROUTER_API_KEY), using keyword parser');
   }
 
   console.log('JWT authentication enabled');

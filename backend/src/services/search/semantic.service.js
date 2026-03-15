@@ -6,6 +6,7 @@
  */
 
 const carsRepo = require('../../repositories/cars.repository');
+const kbRepo = require('../../repositories/knowledgeBase.repository');
 const { generateEmbedding, isAvailable: isEmbeddingsAvailable } = require('../embeddings/embeddings.service');
 
 /**
@@ -15,7 +16,7 @@ const { generateEmbedding, isAvailable: isEmbeddingsAvailable } = require('../em
  * @returns {Promise<{items: Array, total: number, queryType: string}>}
  */
 async function semanticSearch(query, options = {}) {
-  const { limit = 10, threshold = 0.2 } = options;
+  const { limit = 10, threshold = 0.3 } = options;
 
   if (!isEmbeddingsAvailable()) {
     console.warn('[SemanticSearch] Embeddings not available (no OPENAI_API_KEY)');
@@ -23,18 +24,21 @@ async function semanticSearch(query, options = {}) {
   }
 
   try {
-    // Generate embedding for query
+    // One embedding, search both cars + knowledge base in parallel
     const { embedding, tokens } = await generateEmbedding(query);
 
-    // Search by similarity
-    const results = await carsRepo.searchCarsBySimilarity(embedding, limit, threshold);
+    const [carResults, kbResults] = await Promise.all([
+      carsRepo.searchCarsBySimilarity(embedding, limit, threshold),
+      kbRepo.searchBySimiliarity(embedding, 3, threshold).catch(() => []),
+    ]);
 
-    console.log(`[SemanticSearch] Found ${results.length} results for "${query.substring(0, 50)}" (${tokens} tokens)`);
+    console.log(`[SemanticSearch] Cars: ${carResults.length}, KB: ${kbResults.length} for "${query.substring(0, 50)}" (${tokens} tokens)`);
 
     return {
-      items: results,
-      total: results.length,
+      items: carResults,
+      total: carResults.length,
       queryType: 'semantic',
+      knowledge: kbResults,
       metrics: {
         embeddingTokens: tokens,
       },
@@ -52,7 +56,7 @@ async function semanticSearch(query, options = {}) {
  * @param {Object} options - Search options
  */
 async function hybridSearch(query, filters, options = {}) {
-  const { limit = 10, threshold = 0.2 } = options;
+  const { limit = 10, threshold = 0.3 } = options;
 
   if (!isEmbeddingsAvailable()) {
     console.warn('[HybridSearch] Embeddings not available, falling back to filters only');

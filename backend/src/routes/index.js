@@ -6,6 +6,7 @@ const authRoutes = require('./auth.routes');
 const adminRoutes = require('./admin.routes');
 const errorsRoutes = require('./errors.routes');
 const catalogRoutes = require('./catalog.routes');
+const knowledgeBaseRoutes = require('./knowledgeBase.routes');
 const vinRoutes = require('./vin.routes');
 const chatRoutes = require('./chat.routes');
 
@@ -29,5 +30,8 @@ router.use('/api/v1/admin/errors', errorsRoutes);
 
 // Catalog API
 router.use('/api/v1/admin/catalog', catalogRoutes);
+
+// Knowledge Base API
+router.use('/api/v1/admin/kb', knowledgeBaseRoutes);
 
 module.exports = router;

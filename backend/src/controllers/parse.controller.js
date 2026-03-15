@@ -7,8 +7,26 @@ const { semanticSearch, hybridSearch, isSemanticSearchAvailable } = require('../
 const { logParseSession } = require('../repositories/sessions.repository');
 const { logErrorToGraveyard } = require('../repositories/errors.repository');
 const { security, classifier } = require('../services/agents');
+const { getSynonyms } = require('../services/config/synonyms.service');
 
 const MIN_FILTERS_REQUIRED = 3;
+
+/**
+ * Подставляет сленг марок из БД: "жмурки" → "BMW" и т.д.
+ */
+function replaceSlang(text) {
+  const synonyms = getSynonyms();
+  if (!synonyms || Object.keys(synonyms).length === 0) return text;
+
+  let result = text.toLowerCase();
+  const sorted = Object.entries(synonyms).sort((a, b) => b[0].length - a[0].length);
+  for (const [slang, brand] of sorted) {
+    if (result.includes(slang)) {
+      result = result.replace(new RegExp(slang, 'g'), brand);
+    }
+  }
+  return result;
+}
 
 async function parse(req, res) {
   try {
@@ -16,6 +34,12 @@ async function parse(req, res) {
 
     if (!query || query.length < 2) {
       return res.status(400).json({ error: 'INVALID_QUERY', details: 'Query too short' });
+    }
+
+    // Подставляем сленг марок из БД перед обработкой
+    const normalizedQuery = replaceSlang(query);
+    if (normalizedQuery !== query.toLowerCase()) {
+      console.log(`[Parse] Slang replaced: "${query}" → "${normalizedQuery}"`);
     }
 
     const safeLimit = Math.min(Math.max(1, parseInt(limit) || 10), 50);
@@ -72,7 +96,7 @@ async function parse(req, res) {
 
   if (config.llmEnabled && isSemanticSearchAvailable()) {
     try {
-      classification = await classifier.classifyQuery(query);
+      classification = await classifier.classifyQuery(normalizedQuery);
       queryType = classification.queryType;
       console.log(`[Classifier] Query type: ${queryType} (${classification.confidence})`);
     } catch (classifyErr) {
@@ -85,18 +109,18 @@ async function parse(req, res) {
   if (queryType !== 'semantic') {
     if (config.llmEnabled) {
       try {
-        const llmResult = await llmParse(query);
+        const llmResult = await llmParse(normalizedQuery);
         filters = llmResult.filters;
         costUsd = llmResult.costUsd;
         parsingMethod = 'llm';
         console.log(`LLM parsed: ${JSON.stringify(filters)}, cost: $${costUsd}`);
       } catch (err) {
         console.error('LLM parse error, falling back to keyword:', err.message);
-        filters = keywordParse(query);
+        filters = keywordParse(normalizedQuery);
         parsingMethod = 'keyword';
       }
     } else {
-      filters = keywordParse(query);
+      filters = keywordParse(normalizedQuery);
       parsingMethod = 'keyword';
     }
   }
@@ -112,7 +136,7 @@ async function parse(req, res) {
     if (queryType === 'semantic') {
       // Pure semantic search
       parsingMethod = 'semantic';
-      const searchResult = await semanticSearch(query, { limit: safeLimit });
+      const searchResult = await semanticSearch(normalizedQuery, { limit: safeLimit });
       results = searchResult.items;
       total = searchResult.total;
       searchMetrics = searchResult.metrics || {};
@@ -123,7 +147,7 @@ async function parse(req, res) {
     } else if (queryType === 'hybrid' && isSemanticSearchAvailable()) {
       // Hybrid search: semantic + filters
       parsingMethod = 'hybrid';
-      const searchResult = await hybridSearch(query, filters || {}, { limit: safeLimit });
+      const searchResult = await hybridSearch(normalizedQuery, filters || {}, { limit: safeLimit });
       results = searchResult.items;
       total = searchResult.total;
       searchMetrics = searchResult.metrics || {};
@@ -150,22 +174,8 @@ async function parse(req, res) {
           errorType = 'no_results';
         }
       } else if (filters && filterCount < MIN_FILTERS_REQUIRED) {
-        // Try semantic search as fallback for insufficient filters
-        if (isSemanticSearchAvailable()) {
-          console.log('Insufficient filters, trying semantic search fallback');
-          const semanticResult = await semanticSearch(query, { limit: safeLimit });
-          if (semanticResult.total > 0) {
-            results = semanticResult.items;
-            total = semanticResult.total;
-            parsingMethod = 'semantic_fallback';
-            searchMetrics = semanticResult.metrics || {};
-          } else {
-            errorType = 'insufficient_filters';
-          }
-        } else {
-          errorType = 'insufficient_filters';
-          console.log(`Insufficient filters: ${filterCount}/${MIN_FILTERS_REQUIRED} (${JSON.stringify(filters)})`);
-        }
+        errorType = 'insufficient_filters';
+        console.log(`Insufficient filters: ${filterCount}/${MIN_FILTERS_REQUIRED} (${JSON.stringify(filters)})`);
       } else {
         errorType = 'parse_failed';
       }

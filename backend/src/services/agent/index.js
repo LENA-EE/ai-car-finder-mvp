@@ -5,11 +5,59 @@
  * Использует DeepSeek с function calling.
  */
 
-const { openai } = require('../../config/openai');
+const { openai, LLM_MODEL } = require('../../config/openai');
 const { TOOLS } = require('./tools');
 const { executeTool } = require('./executor');
+const { getSynonyms } = require('../config/synonyms.service');
 
 const MAX_ITERATIONS = 5; // Защита от бесконечного цикла
+
+/**
+ * Заменяет сленг марок в тексте на нормализованные названия.
+ * "найди тазик" → "найди ВАЗ (Lada)"
+ */
+function replaceSlang(text) {
+  const synonyms = getSynonyms();
+  if (!synonyms || Object.keys(synonyms).length === 0) return text;
+
+  let result = text.toLowerCase();
+  // Сортируем по длине (длинные сначала), чтобы "land cruiser" матчился раньше "land"
+  const sorted = Object.entries(synonyms).sort((a, b) => b[0].length - a[0].length);
+  for (const [slang, brand] of sorted) {
+    if (result.includes(slang)) {
+      result = result.replace(new RegExp(slang, 'g'), brand);
+    }
+  }
+  return result;
+}
+
+/**
+ * Краткая версия результата инструмента для LLM (экономим токены)
+ * Полный результат сохраняется в toolResults для фронтенда.
+ */
+function summarizeForLLM(toolName, result) {
+  if (!result || !result.success) return result;
+
+  if ((toolName === 'search_cars' || toolName === 'semantic_search') && result.cars) {
+    return {
+      success: true,
+      total: result.total,
+      query: result.query,
+      cars: result.cars.slice(0, 5).map(c => ({
+        name: c.name,
+        year: c.year,
+        price: c.price,
+        engine: c.engine,
+      })),
+      note: result.cars.length > 5
+        ? `Показано 5 из ${result.cars.length}. Все карточки отображаются пользователю автоматически.`
+        : 'Все карточки отображаются пользователю автоматически.',
+      knowledge: result.knowledge,
+    };
+  }
+
+  return result;
+}
 
 /**
  * Системный промпт для агента
@@ -27,6 +75,8 @@ function getSystemPrompt(mode = 'friendly') {
 3. Если пользователь здоровается — просто поздоровайся
 4. Понимай русский сленг: бумер=BMW, мерс=Mercedes, тойота=Toyota, до 2 млн=price_max:2000000
 5. Если запрос непонятен — уточни
+6. ВАЖНО: Когда ты вызвал search_cars или semantic_search — НЕ перечисляй найденные машины в тексте ответа! Карточки машин показываются отдельно автоматически. В тексте только кратко прокомментируй результаты (например "Нашёл 5 вариантов, вот что есть:") и дай совет если нужно.
+7. VIN: НИКОГДА не проверяй VIN сам и не считай символы! ВСЕГДА вызывай check_vin или decode_vin — они сами валидируют. Передавай VIN как есть, без изменений.
 
 СЛЕНГ ЦЕН:
 - "до 700к" = price_max: 700000
@@ -68,7 +118,7 @@ async function processWithAgent(message, history = [], mode = 'friendly') {
       role: msg.role,
       content: msg.content,
     })),
-    { role: 'user', content: message },
+    { role: 'user', content: replaceSlang(message) },
   ];
 
   let iterations = 0;
@@ -80,12 +130,12 @@ async function processWithAgent(message, history = [], mode = 'friendly') {
     try {
       // Вызываем LLM с инструментами
       const response = await openai.chat.completions.create({
-        model: 'deepseek/deepseek-chat',
+        model: LLM_MODEL,
         messages,
         tools: TOOLS,
         tool_choice: 'auto',
         temperature: 0.7,
-        max_tokens: 1000,
+        max_tokens: 400,
       });
 
       const choice = response.choices[0];
@@ -107,15 +157,21 @@ async function processWithAgent(message, history = [], mode = 'friendly') {
             console.error('Failed to parse tool arguments:', toolCall.function.arguments);
           }
 
+          // Приведение типов (Llama иногда передаёт строки вместо чисел)
+          toolArgs = coerceToolArgs(toolName, toolArgs);
+
           // Выполняем инструмент
           const result = await executeTool(toolName, toolArgs);
           toolResults.push({ tool: toolName, args: toolArgs, result });
+
+          // Для LLM отправляем краткую версию (экономим токены)
+          const llmResult = summarizeForLLM(toolName, result);
 
           // Добавляем результат в историю
           messages.push({
             role: 'tool',
             tool_call_id: toolCall.id,
-            content: JSON.stringify(result),
+            content: JSON.stringify(llmResult),
           });
         }
 
@@ -165,6 +221,25 @@ async function processWithAgent(message, history = [], mode = 'friendly') {
     cars: null,
     vinResult: null,
   };
+}
+
+/**
+ * Приведение типов аргументов (Llama может передавать строки вместо чисел)
+ */
+function coerceToolArgs(name, args) {
+  if (!args || typeof args !== 'object') return args;
+
+  const numericFields = ['price_min', 'price_max', 'year_from', 'year_to', 'limit'];
+  const coerced = { ...args };
+
+  for (const field of numericFields) {
+    if (field in coerced && typeof coerced[field] === 'string') {
+      const num = Number(coerced[field]);
+      if (!isNaN(num)) coerced[field] = num;
+    }
+  }
+
+  return coerced;
 }
 
 module.exports = { processWithAgent };

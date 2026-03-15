@@ -1,4 +1,4 @@
-const { openai } = require('../../config/openai');
+const { openai, LLM_MODEL } = require('../../config/openai');
 const { FEW_SHOT_EXAMPLES } = require('../../constants/fewShotExamples');
 const { getPromptConfig } = require('../config/prompts.service');
 
@@ -48,7 +48,7 @@ async function llmParse(query) {
   ];
 
   const response = await openai.chat.completions.create({
-    model: 'deepseek/deepseek-chat',
+    model: LLM_MODEL,
     messages,
     temperature: promptConfig.temperature,
     max_tokens: promptConfig.max_tokens,

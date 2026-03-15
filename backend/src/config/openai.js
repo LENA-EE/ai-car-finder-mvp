@@ -1,8 +1,10 @@
 const OpenAI = require('openai');
 
-const openai = new OpenAI({
-  apiKey: process.env.OPENROUTER_API_KEY,
-  baseURL: 'https://openrouter.ai/api/v1'
-});
+// Всё через OpenRouter (LLM + embeddings)
+const apiKey = process.env.OPENROUTER_API_KEY;
+const baseURL = 'https://openrouter.ai/api/v1';
+const LLM_MODEL = 'deepseek/deepseek-chat';
 
-module.exports = { openai };
+const openai = new OpenAI({ apiKey, baseURL });
+
+module.exports = { openai, LLM_MODEL };

@@ -88,7 +88,7 @@ async function executeLocal(name, args) {
  * Поиск машин по параметрам
  */
 async function executeSearchCars(args) {
-  const { limit = 5, ...filters } = args;
+  const { limit = 30, ...filters } = args;
 
   // Убираем пустые значения
   const cleanFilters = {};
@@ -123,10 +123,11 @@ async function executeSearchCars(args) {
  * Полная проверка VIN
  */
 async function executeCheckVin(args) {
-  const { vin } = args;
+  const vin = (args.vin || '').trim().toUpperCase();
+  console.log(`[CheckVIN] Raw arg: "${args.vin}", normalized: "${vin}", length: ${vin.length}`);
 
   if (!vin || vin.length !== 17) {
-    return { success: false, error: 'VIN должен содержать 17 символов' };
+    return { success: false, error: `VIN должен содержать 17 символов (получено ${vin.length})` };
   }
 
   try {
@@ -168,10 +169,10 @@ async function executeCheckVin(args) {
  * Расшифровка VIN
  */
 async function executeDecodeVin(args) {
-  const { vin } = args;
+  const vin = (args.vin || '').trim();
 
   if (!vin || vin.length !== 17) {
-    return { success: false, error: 'VIN должен содержать 17 символов' };
+    return { success: false, error: `VIN должен содержать 17 символов (получено ${vin.length})` };
   }
 
   try {
@@ -239,7 +240,7 @@ async function executeCompareModels(args) {
  * Семантический поиск
  */
 async function executeSemanticSearch(args) {
-  const { query, limit = 5 } = args;
+  const { query, limit = 30 } = args;
 
   if (!isSemanticSearchAvailable()) {
     return {
@@ -250,7 +251,7 @@ async function executeSemanticSearch(args) {
 
   try {
     const result = await semanticSearch(query, { limit });
-    return {
+    const response = {
       success: true,
       query,
       total: result.total,
@@ -264,6 +265,19 @@ async function executeSemanticSearch(args) {
         similarity: car.similarity,
       })),
     };
+    // Include knowledge base articles if found (high similarity only)
+    if (result.knowledge && result.knowledge.length > 0) {
+      const relevant = result.knowledge.filter(kb => parseFloat(kb.similarity) >= 0.5);
+      if (relevant.length > 0) {
+        response.knowledge = relevant.map(kb => ({
+          title: kb.title,
+          content: kb.content.substring(0, 500),
+          similarity: kb.similarity,
+        }));
+        response.note = 'В knowledge найдены статьи из базы знаний. Используй их ТОЛЬКО если они напрямую отвечают на вопрос пользователя. НЕ вставляй случайные факты из базы знаний в ответ про поиск машин.';
+      }
+    }
+    return response;
   } catch (err) {
     return { success: false, error: err.message };
   }

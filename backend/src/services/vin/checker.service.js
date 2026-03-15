@@ -24,6 +24,7 @@ async function checkVin(vin, sources = null) {
 
   const enabledSources = sources || getEnabledSources();
   const results = {
+    valid: true,
     vin: decodeResult.vin,
     decode: decodeResult.decode,
     gibdd: null,

@@ -5,7 +5,7 @@ import { ChatMessage, CarDetailModal } from "./ChatMessage";
 export function Chat() {
   const [input, setInput] = useState("");
   const [selectedCar, setSelectedCar] = useState(null);
-  const [chatMode, setChatMode] = useState("friendly"); // "quick" | "friendly"
+  const [chatMode, setChatMode] = useState("chat"); // "parse" | "chat"
   const messagesEndRef = useRef(null);
   const inputRef = useRef(null);
   const { messages, loading, sendMessage, clearChat } = useChat();
@@ -35,51 +35,33 @@ export function Chat() {
   };
 
   return (
-    <div className="flex flex-col h-[calc(100vh-180px)] max-w-3xl mx-auto">
+    <div className="chat-container">
       {/* Header */}
-      <div className="flex items-center justify-between mb-4">
-        <h2 className="text-xl font-bold text-slate-200">AI Помощник</h2>
-        <button
-          onClick={clearChat}
-          className="text-slate-400 hover:text-slate-200 text-sm"
-        >
+      <div className="chat-header">
+        <h2 className="chat-title">AI Помощник</h2>
+        <button onClick={clearChat} className="chat-clear-btn">
           Очистить чат
         </button>
       </div>
 
       {/* Mode Toggle */}
-      <div className="flex items-center gap-4 mb-4 p-3 bg-slate-800/50 rounded-xl">
-        <span className="text-slate-400 text-sm">Режим:</span>
-        <label className="flex items-center gap-2 cursor-pointer">
-          <input
-            type="radio"
-            name="chatMode"
-            value="quick"
-            checked={chatMode === "quick"}
-            onChange={(e) => setChatMode(e.target.value)}
-            className="w-4 h-4 accent-blue-500"
-          />
-          <span className={`text-sm ${chatMode === "quick" ? "text-slate-200" : "text-slate-400"}`}>
-            Быстрый подбор
-          </span>
-        </label>
-        <label className="flex items-center gap-2 cursor-pointer">
-          <input
-            type="radio"
-            name="chatMode"
-            value="friendly"
-            checked={chatMode === "friendly"}
-            onChange={(e) => setChatMode(e.target.value)}
-            className="w-4 h-4 accent-blue-500"
-          />
-          <span className={`text-sm ${chatMode === "friendly" ? "text-slate-200" : "text-slate-400"}`}>
-            Живое общение
-          </span>
-        </label>
+      <div className="chat-mode-toggle">
+        <button
+          className={"chat-mode-btn" + (chatMode === "parse" ? " chat-mode-btn--active" : "")}
+          onClick={() => setChatMode("parse")}
+        >
+          Быстрый поиск
+        </button>
+        <button
+          className={"chat-mode-btn" + (chatMode === "chat" ? " chat-mode-btn--active" : "")}
+          onClick={() => setChatMode("chat")}
+        >
+          AI Консультант
+        </button>
       </div>
 
       {/* Messages */}
-      <div className="flex-1 overflow-y-auto pr-2 space-y-2">
+      <div className="chat-messages">
         {messages.map((msg, i) => (
           <ChatMessage
             key={i}
@@ -90,12 +72,12 @@ export function Chat() {
         ))}
 
         {loading && (
-          <div className="flex justify-start mb-4">
-            <div className="bg-slate-700 rounded-2xl rounded-bl-md px-4 py-3">
-              <div className="flex gap-1">
-                <span className="w-2 h-2 bg-slate-400 rounded-full animate-bounce" />
-                <span className="w-2 h-2 bg-slate-400 rounded-full animate-bounce [animation-delay:0.1s]" />
-                <span className="w-2 h-2 bg-slate-400 rounded-full animate-bounce [animation-delay:0.2s]" />
+          <div className="chat-bubble-row chat-bubble-row--assistant">
+            <div className="chat-bubble chat-bubble--assistant">
+              <div className="chat-typing">
+                <span className="chat-typing-dot" />
+                <span className="chat-typing-dot" />
+                <span className="chat-typing-dot" />
               </div>
             </div>
           </div>
@@ -105,29 +87,35 @@ export function Chat() {
       </div>
 
       {/* Input */}
-      <form onSubmit={handleSubmit} className="mt-4 flex gap-2">
+      <form onSubmit={handleSubmit} className="chat-input-bar">
         <input
           ref={inputRef}
           type="text"
           value={input}
           onChange={(e) => setInput(e.target.value)}
           onKeyDown={handleKeyDown}
-          placeholder="Опиши какую машину ищешь или введи VIN..."
+          placeholder={chatMode === "parse"
+            ? "BMW X5 дизель до 3 млн, кроссовер автомат..."
+            : "Опиши какую машину ищешь или введи VIN..."
+          }
           disabled={loading}
-          className="flex-1 p-3 bg-slate-800 border border-slate-700 rounded-xl text-slate-200 focus:outline-none focus:border-blue-500 disabled:opacity-50"
+          className="chat-input"
         />
         <button
           type="submit"
           disabled={loading || !input.trim()}
-          className="px-6 py-3 bg-blue-500 rounded-xl text-white font-medium hover:bg-blue-600 disabled:bg-slate-600 disabled:cursor-not-allowed transition-colors"
+          className="chat-send-btn"
         >
           {loading ? "..." : "Отправить"}
         </button>
       </form>
 
       {/* Hint */}
-      <div className="mt-2 text-center text-slate-500 text-xs">
-        Примеры: "кроссовер до 2 млн" • "надёжная семейная машина" • "проверь VIN WBAPH5C55BA123456"
+      <div className="chat-hint">
+        {chatMode === "parse"
+          ? "Быстрый поиск по фильтрам: марка, кузов, двигатель, бюджет, привод, коробка"
+          : 'Примеры: "кроссовер до 2 млн" \u2022 "надежная семейная машина" \u2022 "проверь VIN NMTKH4BX90R122774"'
+        }
       </div>
 
       {/* Car detail modal */}
@@ -136,7 +124,7 @@ export function Chat() {
           car={selectedCar}
           onClose={() => setSelectedCar(null)}
           onCheckVin={(query) => {
-            sendMessage(query);
+            sendMessage(query, chatMode);
             setSelectedCar(null);
           }}
         />

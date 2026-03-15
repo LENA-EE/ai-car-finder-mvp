@@ -1,0 +1,379 @@
+/* ========================================
+   AI Car Finder — Premium Dark Sidebar
+   Glass + champagne gold + deep space
+   ======================================== */
+
+.sidebar {
+  position: fixed;
+  top: 0;
+  left: 0;
+  height: 100vh;
+  width: 260px;
+  background: rgba(12, 12, 20, 0.85);
+  backdrop-filter: blur(24px) saturate(1.2);
+  border-right: 1px solid rgba(200, 180, 140, 0.06);
+  display: flex;
+  flex-direction: column;
+  padding: 20px 14px;
+  z-index: 50;
+  overflow: hidden;
+  transition: width 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.sidebar--collapsed {
+  width: 72px;
+}
+
+/* ---- Ambient glow — warm gold + cool steel ---- */
+.sidebar__glow {
+  position: absolute;
+  border-radius: 50%;
+  filter: blur(80px);
+  pointer-events: none;
+  animation: glowPulse 8s ease-in-out infinite;
+}
+
+.sidebar__glow--1 {
+  width: 180px;
+  height: 180px;
+  background: rgba(196, 168, 130, 0.06);
+  top: -60px;
+  left: -60px;
+}
+
+.sidebar__glow--2 {
+  width: 140px;
+  height: 140px;
+  background: rgba(140, 160, 200, 0.04);
+  bottom: 10%;
+  right: -60px;
+  animation-delay: -4s;
+}
+
+.sidebar__glow--3 {
+  width: 100px;
+  height: 100px;
+  background: rgba(196, 168, 130, 0.04);
+  bottom: 40%;
+  left: -30px;
+  animation-delay: -6s;
+}
+
+@keyframes glowPulse {
+  0%, 100% { opacity: 1; transform: scale(1); }
+  50% { opacity: 0.6; transform: scale(1.05); }
+}
+
+/* ---- Logo ---- */
+.sidebar__logo {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 4px 6px;
+  margin-bottom: 32px;
+  cursor: pointer;
+  position: relative;
+  z-index: 1;
+}
+
+.sidebar__logo-icon {
+  width: 38px;
+  height: 38px;
+  border-radius: 10px;
+  background: linear-gradient(135deg, #c4a882, #8a7a6a);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-weight: 800;
+  font-size: 13px;
+  color: #0c0c14;
+  flex-shrink: 0;
+  letter-spacing: -0.03em;
+}
+
+.sidebar__logo-text {
+  display: flex;
+  flex-direction: column;
+}
+
+.sidebar__logo-text span:first-child {
+  font-weight: 600;
+  font-size: 15px;
+  color: #e8e4ec;
+  letter-spacing: 0.02em;
+}
+
+.sidebar__logo-badge {
+  font-size: 9px;
+  font-weight: 500;
+  color: #c4a882;
+  letter-spacing: 0.15em;
+  text-transform: uppercase;
+}
+
+/* ---- Navigation ---- */
+.sidebar__nav {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  position: relative;
+  z-index: 1;
+  overflow-y: auto;
+}
+
+.sidebar__section-label {
+  font-size: 9px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.18em;
+  color: rgba(196, 168, 130, 0.4);
+  padding: 12px 10px 8px;
+  min-height: 26px;
+}
+
+.sidebar__section-label--mt {
+  margin-top: 16px;
+}
+
+.sidebar__item {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 9px 10px;
+  border: none;
+  border-radius: 8px;
+  background: transparent;
+  color: rgba(224, 220, 232, 0.4);
+  font-size: 13px;
+  font-weight: 450;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  width: 100%;
+  text-align: left;
+}
+
+.sidebar__item:hover {
+  background: rgba(255, 255, 255, 0.03);
+  color: rgba(224, 220, 232, 0.8);
+}
+
+.sidebar__item--active {
+  background: rgba(196, 168, 130, 0.08);
+  color: #e8e4ec;
+}
+
+.sidebar__item-icon {
+  font-size: 16px;
+  width: 22px;
+  text-align: center;
+  flex-shrink: 0;
+  transition: transform 0.2s ease;
+}
+
+.sidebar__item:hover .sidebar__item-icon {
+  transform: scale(1.05);
+}
+
+.sidebar__item-label {
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.sidebar__item-indicator {
+  position: absolute;
+  left: 0;
+  top: 50%;
+  transform: translateY(-50%);
+  width: 2px;
+  height: 16px;
+  border-radius: 0 2px 2px 0;
+  background: #c4a882;
+}
+
+/* ---- Promo card ---- */
+.sidebar__promo {
+  position: relative;
+  z-index: 1;
+  margin: 16px 2px;
+  padding: 16px;
+  border-radius: 12px;
+  background: rgba(196, 168, 130, 0.04);
+  border: 1px solid rgba(196, 168, 130, 0.08);
+  transition: border-color 0.3s;
+}
+
+.sidebar__promo:hover {
+  border-color: rgba(196, 168, 130, 0.15);
+}
+
+.sidebar__promo-sparkle {
+  font-size: 18px;
+  margin-bottom: 10px;
+}
+
+.sidebar__promo-title {
+  font-weight: 600;
+  font-size: 13px;
+  color: #e8e4ec;
+  margin-bottom: 4px;
+}
+
+.sidebar__promo-text {
+  font-size: 11px;
+  color: rgba(224, 220, 232, 0.35);
+  line-height: 1.5;
+  margin-bottom: 14px;
+}
+
+.sidebar__promo-btn {
+  width: 100%;
+  padding: 8px 0;
+  border: 1px solid rgba(196, 168, 130, 0.25);
+  border-radius: 6px;
+  background: transparent;
+  color: #c4a882;
+  font-weight: 600;
+  font-size: 12px;
+  letter-spacing: 0.03em;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.sidebar__promo-btn:hover {
+  background: rgba(196, 168, 130, 0.08);
+  border-color: rgba(196, 168, 130, 0.4);
+}
+
+/* ---- Collapse toggle ---- */
+.sidebar__toggle {
+  position: relative;
+  z-index: 1;
+  margin: 8px 2px;
+  padding: 7px;
+  border: 1px solid rgba(255, 255, 255, 0.04);
+  border-radius: 6px;
+  background: transparent;
+  color: rgba(224, 220, 232, 0.2);
+  font-size: 13px;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.sidebar__toggle:hover {
+  background: rgba(255, 255, 255, 0.03);
+  color: rgba(224, 220, 232, 0.5);
+}
+
+/* ---- User profile ---- */
+.sidebar__profile {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 14px 6px 4px;
+  margin-top: 4px;
+  border-top: 1px solid rgba(255, 255, 255, 0.04);
+  position: relative;
+  z-index: 1;
+}
+
+.sidebar__avatar {
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  background: rgba(196, 168, 130, 0.12);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-weight: 600;
+  font-size: 12px;
+  color: #c4a882;
+  flex-shrink: 0;
+}
+
+.sidebar__avatar::before {
+  display: none;
+}
+
+.sidebar__profile-info {
+  overflow: hidden;
+  min-width: 0;
+}
+
+.sidebar__profile-name {
+  font-size: 12px;
+  font-weight: 500;
+  color: rgba(224, 220, 232, 0.6);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.sidebar__profile-logout {
+  background: none;
+  border: none;
+  padding: 0;
+  font-size: 10px;
+  color: rgba(224, 220, 232, 0.2);
+  cursor: pointer;
+  transition: color 0.2s;
+}
+
+.sidebar__profile-logout:hover {
+  color: rgba(224, 220, 232, 0.5);
+}
+
+/* ---- Collapsed ---- */
+.sidebar--collapsed .sidebar__item {
+  justify-content: center;
+  padding: 9px;
+}
+
+.sidebar--collapsed .sidebar__item[title]:hover::after {
+  content: attr(title);
+  position: absolute;
+  left: calc(100% + 12px);
+  top: 50%;
+  transform: translateY(-50%);
+  background: rgba(20, 20, 30, 0.95);
+  border: 1px solid rgba(255, 255, 255, 0.06);
+  color: #e0dce8;
+  padding: 6px 12px;
+  border-radius: 6px;
+  font-size: 12px;
+  white-space: nowrap;
+  z-index: 100;
+  backdrop-filter: blur(12px);
+}
+
+.sidebar--collapsed .sidebar__item-indicator {
+  display: none;
+}
+
+.sidebar--collapsed .sidebar__profile {
+  justify-content: center;
+}
+
+.sidebar--collapsed .sidebar__logo {
+  justify-content: center;
+}
+
+.sidebar--collapsed .sidebar__toggle {
+  text-align: center;
+}
+
+/* ---- Scrollbar ---- */
+.sidebar__nav::-webkit-scrollbar {
+  width: 2px;
+}
+
+.sidebar__nav::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.sidebar__nav::-webkit-scrollbar-thumb {
+  background: rgba(196, 168, 130, 0.12);
+  border-radius: 2px;
+}

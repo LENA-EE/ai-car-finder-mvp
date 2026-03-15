@@ -11,48 +11,69 @@ export function useChat() {
   ]);
   const [loading, setLoading] = useState(false);
 
-  const sendMessage = useCallback(async (text, mode = "friendly") => {
+  const sendMessage = useCallback(async (text, mode = "chat") => {
     if (!text.trim() || loading) return;
 
-    // Add user message
     const userMessage = { role: "user", content: text };
     setMessages((prev) => [...prev, userMessage]);
     setLoading(true);
 
     try {
-      const res = await fetch(endpoints.chat, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          message: text,
-          history: messages.slice(-10), // Last 10 messages for context
-          mode, // "quick" or "friendly"
-        }),
-      });
+      if (mode === "parse") {
+        // Быстрый поиск — parse pipeline (security -> keyword -> LLM-parser -> SQL)
+        const res = await fetch(endpoints.parse, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ query: text, limit: 30 }),
+        });
 
-      const data = await res.json();
+        const data = await res.json();
 
-      if (!res.ok) {
-        throw new Error(data.error || "Ошибка");
+        setMessages((prev) => [
+          ...prev,
+          {
+            role: "assistant",
+            content: data.message || (data.success ? "Найдено " + data.total + " вариантов" : "Ничего не найдено"),
+            cars: data.results || [],
+            parseMetrics: data.metrics || null,
+          },
+        ]);
+      } else {
+        // AI Консультант — DeepSeek agent с function calling
+        const res = await fetch(endpoints.chat, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            message: text,
+            history: messages.slice(-10),
+            mode: "friendly",
+          }),
+        });
+
+        const data = await res.json();
+
+        if (!res.ok) {
+          throw new Error(data.error || "Ошибка");
+        }
+
+        setMessages((prev) => [
+          ...prev,
+          {
+            role: "assistant",
+            content: data.message,
+            cars: data.cars,
+            vinResult: data.vinResult,
+            suggestions: data.suggestions,
+            toolsUsed: data.toolsUsed,
+          },
+        ]);
       }
-
-      // Add assistant response
-      setMessages((prev) => [
-        ...prev,
-        {
-          role: "assistant",
-          content: data.message,
-          cars: data.cars,
-          vinResult: data.vinResult,
-          suggestions: data.suggestions,
-        },
-      ]);
     } catch (err) {
       setMessages((prev) => [
         ...prev,
         {
           role: "assistant",
-          content: `Ошибка: ${err.message}`,
+          content: "Ошибка: " + err.message,
           isError: true,
         },
       ]);

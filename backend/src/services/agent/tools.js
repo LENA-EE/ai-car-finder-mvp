@@ -28,17 +28,14 @@ const TOOLS = [
           },
           engine_type: {
             type: 'string',
-            enum: ['diesel', 'petrol', 'hybrid', 'electric'],
-            description: 'Тип двигателя',
+            description: 'Тип двигателя: diesel, petrol, hybrid, electric',
           },
           transmission: {
             type: 'string',
-            enum: ['AT', 'MT', 'CVT', 'AMT'],
             description: 'Тип КПП: AT (автомат), MT (механика), CVT (вариатор), AMT (робот)',
           },
           drive_type: {
             type: 'string',
-            enum: ['4WD', 'FWD', 'RWD'],
             description: 'Тип привода: 4WD (полный), FWD (передний), RWD (задний)',
           },
           price_min: {
@@ -50,17 +47,16 @@ const TOOLS = [
             description: 'Максимальная цена в рублях',
           },
           year_from: {
-            type: 'integer',
-            description: 'Год выпуска от',
+            type: 'number',
+            description: 'Год выпуска от (например 2020)',
           },
           year_to: {
-            type: 'integer',
-            description: 'Год выпуска до',
+            type: 'number',
+            description: 'Год выпуска до (например 2024)',
           },
           limit: {
-            type: 'integer',
+            type: 'number',
             description: 'Количество результатов (по умолчанию 5)',
-            default: 5,
           },
         },
         required: [],
@@ -118,11 +114,11 @@ const TOOLS = [
             description: 'Модель автомобиля',
           },
           year_from: {
-            type: 'integer',
+            type: 'number',
             description: 'Поколение: год начала выпуска',
           },
           year_to: {
-            type: 'integer',
+            type: 'number',
             description: 'Поколение: год окончания выпуска',
           },
         },
@@ -163,7 +159,7 @@ const TOOLS = [
     type: 'function',
     function: {
       name: 'semantic_search',
-      description: 'Семантический поиск по абстрактному описанию: "надёжная семейная машина", "экономичный городской автомобиль". Используй когда пользователь описывает машину словами, а не конкретными параметрами.',
+      description: 'Семантический поиск по каталогу машин И базе знаний одновременно. Используй для абстрактных запросов ("надёжная семейная машина", "странная тачка", "что-то связанное с лошадьми"), а также когда пользователь спрашивает факты или советы. Возвращает похожие машины + релевантные статьи из базы знаний.',
       parameters: {
         type: 'object',
         properties: {
@@ -172,9 +168,8 @@ const TOOLS = [
             description: 'Описание желаемого автомобиля',
           },
           limit: {
-            type: 'integer',
+            type: 'number',
             description: 'Количество результатов (по умолчанию 5)',
-            default: 5,
           },
         },
         required: ['query'],

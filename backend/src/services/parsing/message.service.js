@@ -56,14 +56,33 @@ function generateMessage(query, filters, results, errorType) {
 
   if (errorType === "insufficient_filters") {
     const filterCount = filters ? Object.keys(filters).length : 0;
-    const responses = [
-      `Понял ${filterCount} параметр(а), но для точного поиска нужно минимум 3 🎯 Добавь марку, бюджет, тип кузова, год или двигатель!`,
-      `Маловато данных — всего ${filterCount}! Уточни запрос: марка + бюджет + кузов = идеальный результат 🔍`,
-      `${filterCount} из 3 параметров — почти! Добавь ещё что-нибудь: год, тип двигателя, привод? 💪`,
-      `Хм, ${filterCount} фильтр(а) — мало для точного поиска 🤔 Напиши подробнее: например, «BMW X5 дизель до 3 млн»`,
-      `Нужно больше деталей! Пока понял только ${filterCount} параметр(а). Добавь марку/модель, бюджет или тип кузова 📝`,
-    ];
-    return responses[Math.floor(Math.random() * responses.length)];
+
+    // Показываем что уже распознали
+    const recognized = [];
+    if (filters) {
+      if (filters.mark_name) recognized.push(`марка: ${filters.mark_name}`);
+      if (filters.body_type) recognized.push(`кузов: ${filters.body_type}`);
+      if (filters.price_max) recognized.push(`до ${(filters.price_max / 1000000).toFixed(1)} млн`);
+      if (filters.price_min) recognized.push(`от ${(filters.price_min / 1000000).toFixed(1)} млн`);
+      if (filters.year_from) recognized.push(`от ${filters.year_from} г.`);
+      if (filters.transmission) recognized.push(`КПП: ${filters.transmission}`);
+      if (filters.engine_type) recognized.push(`двигатель: ${filters.engine_type}`);
+      if (filters.drive_type) recognized.push(`привод: ${filters.drive_type}`);
+      if (filters.min_hp) recognized.push(`от ${filters.min_hp} л.с.`);
+    }
+
+    const recognizedStr = recognized.length > 0 ? ` Понял: ${recognized.join(', ')}.` : '';
+
+    // Подсказываем что НЕ хватает
+    const missing = [];
+    if (!filters?.mark_name) missing.push('марку');
+    if (!filters?.body_type) missing.push('тип кузова');
+    if (!filters?.price_max && !filters?.price_min) missing.push('бюджет');
+    if (!filters?.year_from) missing.push('год');
+    if (!filters?.transmission) missing.push('КПП');
+    const missingStr = missing.slice(0, 3).join(', ');
+
+    return `${filterCount} из 3 параметров — мало для точного поиска 🎯${recognizedStr} Добавь ещё: ${missingStr}`;
   }
 
   if (isOffTopic || (filters === null && errorType !== "injection")) {
